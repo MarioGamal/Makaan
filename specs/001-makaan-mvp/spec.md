@@ -241,3 +241,29 @@ Sellers can view their listings, see engagement metrics (views, saves, contacts)
 - Listing price is always in Egyptian Pounds (EGP)
 - Long-term rentals only (monthly/yearly); no short-term/vacation rentals
 - Residential properties only for MVP
+
+### Development & Deployment Phases
+
+**Phase 1: Local Development (Weeks 1-6) - $0/month**
+- Docker Compose (PostgreSQL + PostGIS + Redis) runs locally
+- Mock OTP service (no real SMS) for authentication testing
+- Cloudinary free tier (25GB storage) for image uploads
+- Mapbox free tier (50k loads/month) for map testing
+- No cloud hosting needed - all development on local machine
+
+**Phase 2: Staging/Testing (Week 7) - $0-5/month**
+- Railway.app: $5 free credit covers backend + database hosting
+- Vercel: FREE frontend hosting with automatic deployments
+- Mock OTP or Twilio test credentials (magic numbers) - no SMS costs
+- Cloudinary free tier continues
+- Mapbox free tier continues
+
+**Phase 3: Limited Production Test (Week 8) - ~$56/month**
+- DigitalOcean: $6/month droplet (1GB RAM, supports 100 users)
+- Twilio: $50/month (250 users × 2 OTPs × $0.10 via Egyptian SMS carrier)
+- All other services remain on free tiers
+
+**Post-MVP Scale (1000+ users) - ~$422/month**
+- Upgrade hosting as needed based on actual traffic
+- Switch to local Egyptian SMS provider for cost savings (60% reduction)
+- Consider S3 + CloudFront migration from Cloudinary at scale

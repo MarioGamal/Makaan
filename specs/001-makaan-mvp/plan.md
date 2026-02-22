@@ -16,7 +16,7 @@ Build a map-first real estate marketplace for Cairo that prioritizes data qualit
 **Target Platform**: Web browsers (mobile-first: iOS Safari, Chrome Android) + Node.js server (backend) + Vercel/DigitalOcean (hosting)
 **Project Type**: Full-stack web application (backend REST API + frontend SPA with SSR)
 **Performance Goals**: 95% of map searches < 2 seconds (Mapbox vector tiles + PostGIS spatial indexes + Redis caching), OTP delivery < 30 seconds (Twilio SLA), admin review < 5 min per listing (AI duplicate hints)
-**Constraints**: Mobile-first (80% traffic), Cairo geographic boundaries only, Egyptian Pounds (EGP) currency, manual admin approval (50-100 listings/day capacity), MVP budget ~$422/month
+**Constraints**: Mobile-first (80% traffic), Cairo geographic boundaries only, Egyptian Pounds (EGP) currency, manual admin approval (50-100 listings/day capacity), Phased budget: $0 (dev), $0-5 (staging), $56 (limited prod), $422 (full MVP)
 **Scale/Scope**: MVP targeting 200+ active listings, initial user base 1000-5000 users (buyers + sellers + admins), 8-week development timeline
 
 ## Constitution Check

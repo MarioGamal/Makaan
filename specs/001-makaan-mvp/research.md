@@ -627,6 +627,41 @@ test('buyer can search listings by area', async ({ page }) => {
 
 ## 10. Cost Analysis (MVP - First 3 Months)
 
+### Phase 1: Local Development (Weeks 1-6) - $0/month
+
+| Service | Tier | Monthly Cost | Notes |
+|---------|------|--------------|-------|
+| **Docker Compose** | Local | $0 | PostgreSQL + PostGIS + Redis |
+| **Mock OTP Service** | Local | $0 | No real SMS, console logs only |
+| **Cloudinary** | Free | $0 | 25GB storage, 25GB bandwidth |
+| **Mapbox** | Free | $0 | 50k map loads/month |
+| **Total** | | **$0/month** | All development on local machine |
+
+### Phase 2: Staging/Testing (Week 7) - $0-5/month
+
+| Service | Tier | Monthly Cost | Notes |
+|---------|------|--------------|-------|
+| **Railway.app** | Hobby | $5 | Backend + database hosting (free credit) |
+| **Vercel** | Free | $0 | Frontend hosting with auto-deploy |
+| **Mock OTP / Twilio Test** | Test credentials | $0 | Magic numbers, no real SMS costs |
+| **Cloudinary** | Free | $0 | 25GB storage, 25GB bandwidth |
+| **Mapbox** | Free | $0 | 50k map loads/month |
+| **Total** | | **$0-5/month** | Railway free credit covers most costs |
+
+### Phase 3: Limited Production Test (Week 8) - ~$56/month
+
+| Service | Tier | Monthly Cost | Notes |
+|---------|------|--------------|-------|
+| **DigitalOcean Droplet** | 1GB RAM / 1 vCPU | $6 | Backend + DB (supports 100 users) |
+| **Twilio SMS** | Pay-as-you-go | $50 | 250 users × 2 OTPs × $0.10 (Egyptian carrier) |
+| **Cloudinary** | Free | $0 | 25GB storage, 25GB bandwidth |
+| **Mapbox** | Free | $0 | 50k map loads/month |
+| **Sentry** | Free | $0 | 5k errors/month |
+| **Redis Cloud** | Free | $0 | 30MB (sufficient for OTP + sessions) |
+| **Total** | | **~$56/month** | Limited to 250 test users |
+
+### Post-MVP Scale (1000+ users) - ~$422/month
+
 | Service | Tier | Monthly Cost | Notes |
 |---------|------|--------------|-------|
 | **DigitalOcean Droplet** | 2GB RAM / 1 vCPU | $12 | Backend + DB |
@@ -637,13 +672,13 @@ test('buyer can search listings by area', async ({ page }) => {
 | **Sentry** | Free | $0 | 5k errors/month |
 | **Redis Cloud** | Free | $0 | 30MB (sufficient for OTP + sessions) |
 | **Domain + SSL** | Annual | $15/year | .com domain via Namecheap |
-| **Total** | | **~$422/month** | **$440/month if using Twilio** |
+| **Total** | | **~$422/month** | Full MVP with 1000 users |
 
-**Scale Cost Projection (10k users, 2k listings):**
+**Future Scale Projection (10k users, 2k listings):**
 - Droplet: $48/month (8GB RAM)
 - Cloudinary → S3: $30/month (100GB bandwidth)
 - Mapbox: $50/month (100k loads)
-- Twilio → Local Carrier: $150/month (1000 SMS/month at $0.15)
+- Twilio → Local Egyptian Carrier: $150/month (1000 SMS/month at $0.15, 60% cost savings)
 - **Total: ~$278/month** (37% cost reduction by switching to local SMS + S3)
 
 ---

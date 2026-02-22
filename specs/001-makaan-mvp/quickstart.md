@@ -35,11 +35,20 @@
 
 ### Third-Party Accounts Needed
 
+**For Local Development ($0 cost):**
+
 | Service | Purpose | Free Tier | Sign Up |
 |---------|---------|-----------|---------|
 | **Mapbox** | Map rendering & geocoding | 50k map loads/month | [mapbox.com/signup](https://www.mapbox.com/signup/) |
 | **Cloudinary** | Image hosting & CDN | 25GB storage + bandwidth | [cloudinary.com/users/register](https://cloudinary.com/users/register/free) |
-| **Twilio** | SMS OTP delivery (testing) | Trial credits | [twilio.com/try-twilio](https://www.twilio.com/try-twilio) |
+
+**Optional (NOT needed for local dev):**
+
+| Service | Purpose | When Needed | Sign Up |
+|---------|---------|-------------|---------|
+| **Twilio** | SMS OTP delivery | Staging/Production only | [twilio.com/try-twilio](https://www.twilio.com/try-twilio) |
+
+> **💡 Cost-Saving Tip**: Local development uses a **mock OTP service** (no real SMS). OTP codes are logged to console. This means $0 cost during development (Weeks 1-6). Twilio is only needed when deploying to staging or production.
 
 ### Verify Installation
 
@@ -210,12 +219,15 @@ JWT_EXPIRATION_ADMIN=8h     # 8 hours for admins
 # ============================================
 # TWILIO SMS PROVIDER (OTP Delivery)
 # ============================================
-# Sign up at: https://www.twilio.com/try-twilio
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=+1234567890  # Your Twilio test number
+# 💡 OPTIONAL FOR LOCAL DEV: Leave empty to use mock OTP service ($0 cost)
+# Mock OTP logs codes to console instead of sending real SMS
+# Only fill these when deploying to staging/production
 
-# For testing without sending real SMS (uses Twilio test credentials)
+# TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# TWILIO_AUTH_TOKEN=your_twilio_auth_token
+# TWILIO_PHONE_NUMBER=+1234567890
+
+# For local dev: Mock OTP service (no SMS sent, codes logged to console)
 TWILIO_TEST_MODE=true
 
 # ============================================
@@ -295,7 +307,11 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 3. Navigate to [Dashboard](https://cloudinary.com/console)
 4. Copy **Cloud Name**, **API Key**, and **API Secret** from dashboard
 
-#### 3. Twilio Credentials (Testing)
+#### 3. Twilio Credentials (OPTIONAL - Not Needed for Local Dev)
+
+> **💡 Skip this for local development!** The mock OTP service runs automatically when Twilio credentials are not configured. OTP codes are logged to console at $0 cost.
+
+**Only needed when deploying to staging/production:**
 
 1. Go to [twilio.com/try-twilio](https://www.twilio.com/try-twilio)
 2. Create free account
@@ -303,11 +319,12 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 4. Copy **Account SID** and **Auth Token**
 5. Get a [test phone number](https://console.twilio.com/us1/develop/phone-numbers/manage/incoming) (free)
 
-**For Testing Without Real SMS**:
-Set `TWILIO_TEST_MODE=true` in backend `.env` to use Twilio's test credentials:
-- Test Account SID: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-- Test Auth Token: (provided by Twilio)
-- OTP codes will be logged to console instead of sent via SMS
+**Mock OTP Service (Local Development)**:
+When `TWILIO_ACCOUNT_SID` is not set or `TWILIO_TEST_MODE=true`, OTP codes are:
+- Generated and stored in Redis (5 min expiry)
+- Logged to console: `[MOCK OTP] Phone: +201234567890, Code: 123456`
+- Never sent via real SMS ($0 cost)
+- Perfect for development and automated testing
 
 ---
 
@@ -857,33 +874,26 @@ async processImage(file: Buffer): Promise<Buffer> {
 }
 ```
 
-### 5. Test SMS OTP Locally (Without Sending Real SMS)
+### 5. Test SMS OTP Locally (Mock Service - $0 Cost)
 
-**Option A: Use Twilio Test Credentials**
+> **💰 Cost Savings**: Mock OTP service eliminates SMS costs during development (Weeks 1-6). No Twilio account needed!
 
-Set in `backend/.env`:
-```bash
-TWILIO_TEST_MODE=true
-```
+**Default Behavior (Recommended for Local Dev)**:
 
-OTP codes will be logged to console instead of sending SMS:
-
-```
-[OTP] Phone: +201234567890, Code: 123456 (expires in 5 minutes)
-```
-
-**Option B: Use Mock SMS Service**
+When Twilio credentials are not configured, the backend automatically uses the mock OTP service:
 
 ```typescript
 // backend/src/auth/sms.service.ts
 async sendOTP(phoneNumber: string, code: string) {
-  if (process.env.NODE_ENV === 'development') {
-    // Log to console instead of sending SMS
-    console.log(`[OTP] Phone: ${phoneNumber}, Code: ${code}`);
+  // Check if Twilio is configured
+  if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_TEST_MODE === 'true') {
+    // Mock mode: Log to console, store in Redis
+    console.log(`[MOCK OTP] Phone: ${phoneNumber}, Code: ${code} (expires in 5 minutes)`);
+    await this.redis.setex(`otp:${phoneNumber}`, 300, code);
     return { success: true, mock: true };
   }
 
-  // Production: Use Twilio
+  // Production: Use Twilio (only when credentials are configured)
   return this.twilioClient.messages.create({
     body: `Your Makaan verification code is: ${code}`,
     from: process.env.TWILIO_PHONE_NUMBER,
