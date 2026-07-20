@@ -31,38 +31,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Verify this feature complies with the Makaan Constitution (`.specify/memory/constitution.md`):
-
-**Core Principles Compliance:**
-- [ ] **I. Map-First Architecture**: Does feature maintain map as primary interface? Are all location-related features tied to geographic boundaries?
-- [ ] **II. Admin-Approved Quality Gate**: Does feature respect manual approval workflow? No automated publishing paths?
-- [ ] **III. Data Quality Over Volume**: Does feature enforce required fields and data completeness? No shortcuts that compromise quality?
-- [ ] **IV. One Canonical Listing Per Property**: Does feature prevent or detect duplicates? No mechanisms that enable spam?
-- [ ] **V. Transparent Seller Identity**: Does feature correctly identify and display seller type? No masking of agent status?
-- [ ] **VI. Security & Privacy by Default**: Does feature protect PII, enforce rate limits, and follow security requirements?
-- [ ] **VII. AI as Silent Assistant**: If using AI, is it internal-only? No autonomous decisions or user-facing predictions?
-
-**Security & Privacy Requirements:**
-- [ ] Authentication flows use phone OTP with proper rate limiting and expiry
-- [ ] Authorization enforces RBAC (users modify only their resources, admin-only endpoints protected)
-- [ ] No PII exposed in public APIs
-- [ ] File uploads follow security requirements (format validation, size limits, EXIF stripping)
-- [ ] Rate limits applied to user actions (OTP, submissions, contacts)
-- [ ] Logging masks sensitive data (phone numbers, no OTP logging)
-
-**Data Quality Standards:**
-- [ ] Required fields enforced (client and server validation)
-- [ ] Duplicate detection mechanisms in place where applicable
-- [ ] Cairo geographic boundary validation for map pins
-
-**Development Workflow:**
-- [ ] Feature aligns with all 7 Core Principles
-- [ ] Mobile-first design (feature works on iOS Safari, Chrome Android)
-- [ ] Testing strategy includes contract/integration/security tests as needed
-- [ ] Admin capacity impact assessed (manual review features < 5 min per item)
-
-**Complexity Justification** (fill only if introducing new complexity):
-- Document in Complexity Tracking table below if deviating from constitution or adding significant complexity
+[Gates determined based on constitution file]
 
 ## Project Structure
 

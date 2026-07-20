@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "module": "CommonJS"
+  },
+  "include": [
+    "constants/**/*.ts",
+    "types/**/*.ts",
+    "index.ts"
+  ]
+}
+

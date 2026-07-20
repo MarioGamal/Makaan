@@ -1,0 +1,33 @@
+{
+  "name": "makaan",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace backend run start:dev",
+    "dev:frontend": "npm --workspace frontend run dev",
+    "build": "npm run build:shared && npm run build:backend && npm run build:frontend",
+    "build:shared": "npm --workspace shared run build",
+    "build:backend": "npm --workspace backend run build",
+    "build:frontend": "npm --workspace frontend run build",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "npm --workspace backend run lint",
+    "lint:frontend": "npm --workspace frontend run lint",
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "npm --workspace backend run format",
+    "format:frontend": "npm --workspace frontend run format",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "mapbox-gl": "^2.15.0"
+  }
+}
