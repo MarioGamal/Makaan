@@ -26,7 +26,12 @@ export function ListingCreateMap({
   onChange: (location: { lat: number; lng: number }) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-3xl border border-ink/10">
+    <div
+      aria-label="Private property location"
+      className="overflow-hidden rounded-3xl border border-ink/10"
+      id="listing-location"
+      tabIndex={-1}
+    >
       <Map
         initialViewState={{ latitude: lat, longitude: lng, zoom: 11 }}
         mapStyle="mapbox://styles/mapbox/streets-v12"
@@ -51,4 +56,3 @@ export function ListingCreateMap({
     </div>
   );
 }
-

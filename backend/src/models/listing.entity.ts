@@ -23,7 +23,12 @@ import { User } from './user.entity';
 
 export enum ListingPurpose {
   SALE = 'sale',
-  RENT = 'rent',
+  RENT = 'long_term_rent',
+}
+
+export enum PublicLocationMode {
+  APPROXIMATE = 'approximate',
+  AREA_ONLY = 'area_only',
 }
 
 type PointGeometry = {
@@ -80,7 +85,54 @@ export class Listing {
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
+  @Column({ name: 'title_ar', type: 'varchar', length: 180, nullable: true })
+  titleAr!: string | null;
+
+  @Column({ name: 'title_en', type: 'varchar', length: 180, nullable: true })
+  titleEn!: string | null;
+
+  @Column({ name: 'description_ar', type: 'text', nullable: true })
+  descriptionAr!: string | null;
+
+  @Column({ name: 'description_en', type: 'text', nullable: true })
+  descriptionEn!: string | null;
+
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  amenities!: string[];
+
+  @Column({ name: 'floor_number', type: 'int', nullable: true })
+  floorNumber!: number | null;
+
   @Column({
+    name: 'seller_public_location_mode',
+    type: 'enum',
+    enum: PublicLocationMode,
+    nullable: true,
+  })
+  sellerPublicLocationMode!: PublicLocationMode | null;
+
+  @Column({
+    name: 'approved_public_location_mode',
+    type: 'enum',
+    enum: PublicLocationMode,
+    nullable: true,
+  })
+  approvedPublicLocationMode!: PublicLocationMode | null;
+
+  @Column({
+    name: 'public_location',
+    type: 'geography',
+    spatialFeatureType: 'Point',
+    srid: 4326,
+    nullable: true,
+  })
+  publicLocation!: PointGeometry | null;
+
+  @Column({ name: 'public_location_distance_m', type: 'int', nullable: true })
+  publicLocationDistanceM!: number | null;
+
+  @Column({
+    name: 'exact_location',
     type: 'geography',
     spatialFeatureType: 'Point',
     srid: 4326,
@@ -116,12 +168,40 @@ export class Listing {
   approvedAt!: Date | null;
 
   @Column({
+    name: 'availability_confirmed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  availabilityConfirmedAt!: Date | null;
+
+  @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
+  expiresAt!: Date | null;
+
+  @Column({ name: 'approved_by', type: 'uuid', nullable: true })
+  approvedBy!: string | null;
+
+  @Column({ name: 'rejected_at', type: 'timestamptz', nullable: true })
+  rejectedAt!: Date | null;
+
+  @Column({ name: 'rejected_by', type: 'uuid', nullable: true })
+  rejectedBy!: string | null;
+
+  @Column({
     name: 'rejection_reason',
     type: 'enum',
     enum: RejectionReason,
     nullable: true,
   })
   rejectionReason!: RejectionReason | null;
+
+  @Column({ name: 'current_revision_id', type: 'uuid', nullable: true })
+  currentRevisionId!: string | null;
+
+  @Column({ name: 'approved_revision_id', type: 'uuid', nullable: true })
+  approvedRevisionId!: string | null;
+
+  @Column({ name: 'lock_version', type: 'int', default: 1 })
+  lockVersion!: number;
 
   @ManyToOne(() => User, (user) => user.listings, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'seller_id' })

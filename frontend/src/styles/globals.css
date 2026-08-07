@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-canvas: #f7f4ee;
+  --color-surface: #fffdf8;
+  --color-surface-raised: #ffffff;
+  --color-surface-muted: #eee8dc;
+  --color-ink: #192a25;
+  --color-ink-muted: #53615c;
+  --color-border: #d7d1c5;
+  --color-primary: #125c4e;
+  --color-primary-strong: #0b463b;
+  --color-primary-soft: #dcece5;
+  --color-accent: #b8643b;
+  --color-danger: #ae3e32;
+  --color-danger-soft: #f8e3df;
+  --color-success: #1c7658;
+  --color-warning: #a46016;
+  --shadow-sm: 0 1px 2px rgb(25 42 37 / 0.06);
+  --shadow-md: 0 10px 28px rgb(25 42 37 / 0.1);
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --focus-ring: 0 0 0 3px rgb(18 92 78 / 0.35);
+}
+
 html,
 body,
 #__next {
@@ -10,13 +34,55 @@ body,
 
 body {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  background:
-    radial-gradient(circle at top left, rgba(45, 106, 106, 0.14), transparent 28%),
-    linear-gradient(180deg, #f7f3eb 0%, #efe5d2 100%);
+  color: var(--color-ink);
+  font-family:
+    'Noto Kufi Arabic', 'Noto Sans Arabic', Tahoma, Arial, sans-serif;
+  background: var(--color-canvas);
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
 }
 
 * {
   box-sizing: border-box;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+[role='button'],
+input,
+select,
+textarea {
+  min-height: 44px;
+}
+
+button:not(:disabled),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+::selection {
+  color: var(--color-surface-raised);
+  background: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

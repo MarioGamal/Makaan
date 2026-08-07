@@ -7,7 +7,9 @@ export function DuplicateHintsPanel({ hints }: { hints: DuplicateHint[] }) {
     return (
       <section className="rounded-[2rem] border border-ink/10 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">Duplicate hints</h2>
-        <p className="mt-3 text-sm text-ink/70">No potential duplicates found.</p>
+        <p className="mt-3 text-sm text-ink/70">
+          No potential duplicates found.
+        </p>
       </section>
     );
   }
@@ -17,11 +19,19 @@ export function DuplicateHintsPanel({ hints }: { hints: DuplicateHint[] }) {
       <h2 className="text-xl font-semibold">Duplicate hints</h2>
       <div className="mt-4 space-y-4">
         {hints.map((hint) => (
-          <article className="rounded-2xl border border-ink/10 bg-sand/30 p-4" key={hint.listingId}>
+          <article
+            className="rounded-2xl border border-ink/10 bg-sand/30 p-4"
+            key={hint.listingId}
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold">Listing {hint.listingId.slice(0, 8)}</p>
-                <Link className="mt-1 inline-block text-sm text-oasis" href={`/admin/listings/${hint.listingId}`}>
+                <p className="text-sm font-semibold">
+                  Listing {hint.listingId.slice(0, 8)}
+                </p>
+                <Link
+                  className="mt-1 inline-block text-sm text-oasis"
+                  href={`/admin/listings/${hint.listingId}`}
+                >
                   Open side-by-side review
                 </Link>
               </div>

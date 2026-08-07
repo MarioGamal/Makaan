@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateExtensions001CreateExtensions1760000000000
-  implements MigrationInterface
-{
+export class CreateExtensions001CreateExtensions1760000000000 implements MigrationInterface {
   name = 'CreateExtensions001CreateExtensions1760000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -15,4 +13,3 @@ export class CreateExtensions001CreateExtensions1760000000000
     await queryRunner.query('DROP EXTENSION IF EXISTS postgis;');
   }
 }
-

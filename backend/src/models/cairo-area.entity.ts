@@ -50,4 +50,3 @@ export class CairoArea {
   @OneToMany(() => Listing, (listing) => listing.area)
   listings!: Listing[];
 }
-

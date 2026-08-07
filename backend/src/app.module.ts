@@ -1,32 +1,35 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AdminModule } from './api/admin/admin.module';
 import { AuthModule } from './api/auth/auth.module';
 import { BuyerModule } from './api/buyer/buyer.module';
+import { HealthModule } from './api/health/health.module';
 import { ListingsModule } from './api/listings/listings.module';
 import { SellerListingsModule } from './api/listings/seller-listings.module';
-import { cloudinaryProvider } from './config/cloudinary.config';
+import { validateEnvironment } from './config/environment';
 import { RedisModule } from './config/redis.module';
 import { DatabaseModule } from './database/database.module';
+import { CorrelationIdMiddleware } from './middleware/correlation-id.middleware';
 import { HttpExceptionFilter } from './middleware/http-exception.filter';
-import { JwtStrategy } from './middleware/jwt-auth.guard';
 import { LoggingInterceptor } from './middleware/logging.interceptor';
-import { RolesGuard } from './middleware/roles.guard';
-import { AuthSession } from './models/auth-session.entity';
-import { ImageProcessingService } from './utils/image.service';
+import { AuditService } from './services/audit.service';
+import { ProvidersModule } from './services/providers';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '../.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', '../.env'],
+      cache: true,
+      validate: validateEnvironment,
+    }),
     AdminModule,
     AuthModule,
     BuyerModule,
+    HealthModule,
     DatabaseModule,
     RedisModule,
     ListingsModule,
@@ -38,15 +41,11 @@ import { ImageProcessingService } from './utils/image.service';
         limit: 20,
       },
     ]),
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({}),
-    TypeOrmModule.forFeature([AuthSession]),
+    ProvidersModule,
   ],
   providers: [
-    cloudinaryProvider,
-    JwtStrategy,
-    RolesGuard,
-    ImageProcessingService,
+    AuditService,
+    CorrelationIdMiddleware,
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
@@ -57,4 +56,8 @@ import { ImageProcessingService } from './utils/image.service';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('{*path}');
+  }
+}

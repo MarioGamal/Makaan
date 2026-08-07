@@ -2,29 +2,26 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CairoArea } from '../../models/cairo-area.entity';
-import { Inquiry } from '../../models/inquiry.entity';
 import { Listing } from '../../models/listing.entity';
-import { Photo } from '../../models/photo.entity';
-import { SellerProfile } from '../../models/seller-profile.entity';
-import { View } from '../../models/view.entity';
-import { CairoAreaService } from '../../services/cairo-area.service';
-import { ListingSearchService } from '../../services/listing-search.service';
+import { AreaSearchService } from '../../services/area-search.service';
+import { ContactIntentService } from '../../services/contact-intent.service';
+import { PublicListingService } from '../../services/public-listing.service';
+import { PublicLocationService } from '../../services/public-location.service';
+import { AuthModule } from '../auth/auth.module';
 
 import { AreasController } from './areas.controller';
+import { ContactIntentsController } from './contact-intents.controller';
 import { ListingsController } from './listings.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      Listing,
-      CairoArea,
-      Photo,
-      SellerProfile,
-      View,
-      Inquiry,
-    ]),
+  imports: [AuthModule, TypeOrmModule.forFeature([Listing, CairoArea])],
+  controllers: [ListingsController, AreasController, ContactIntentsController],
+  providers: [
+    AreaSearchService,
+    ContactIntentService,
+    PublicListingService,
+    PublicLocationService,
   ],
-  controllers: [ListingsController, AreasController],
-  providers: [ListingSearchService, CairoAreaService],
+  exports: [PublicListingService],
 })
 export class ListingsModule {}

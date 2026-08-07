@@ -65,13 +65,25 @@ export class AdminModeration1774000000000 implements MigrationInterface {
       `ALTER TABLE "admin_actions" DROP CONSTRAINT "FK_ADMIN_ACTIONS_ADMIN"`,
     );
     await queryRunner.query(`DROP TABLE "seller_notifications"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_ADMIN_ACTIONS_ADMIN_CREATED_AT"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_ADMIN_ACTIONS_ADMIN_CREATED_AT"`,
+    );
     await queryRunner.query(`DROP TABLE "admin_actions"`);
-    await queryRunner.query(`DROP TYPE "public"."admin_actions_action_type_enum"`);
+    await queryRunner.query(
+      `DROP TYPE "public"."admin_actions_action_type_enum"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_USERS_USERNAME_UNIQUE"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "is_2fa_enabled"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "two_factor_secret"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "password_hash"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "username"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "is_2fa_enabled"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "two_factor_secret"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "password_hash"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "username"`,
+    );
   }
 }

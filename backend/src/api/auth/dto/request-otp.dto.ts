@@ -1,4 +1,4 @@
-import { Matches } from 'class-validator';
+import { IsIn, Matches } from 'class-validator';
 
 export class RequestOtpDto {
   @Matches(/^\+201[0125]\d{8}$/, {
@@ -6,5 +6,7 @@ export class RequestOtpDto {
       'Invalid phone number format. Must be Egyptian number (+2010/11/12/15xxxxxxxx)',
   })
   phone!: string;
-}
 
+  @IsIn(['ar', 'en'])
+  locale!: 'ar' | 'en';
+}

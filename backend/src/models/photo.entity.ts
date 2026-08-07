@@ -35,8 +35,9 @@ export class Photo {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @ManyToOne(() => Listing, (listing) => listing.photos, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Listing, (listing) => listing.photos, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'listing_id' })
   listing!: Listing;
 }
-

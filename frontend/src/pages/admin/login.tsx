@@ -3,98 +3,146 @@ import { useRouter } from 'next/router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { useLocale } from '../../components/layout/LocaleProvider';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
+import { authCopy } from '../../i18n/auth';
 
-const adminLoginSchema = z.object({
-  username: z.string().min(3, 'Enter your admin username'),
-  password: z
-    .string()
-    .min(12, 'Password must be at least 12 characters')
-    .regex(/[a-z]/, 'Password must include lowercase letters')
-    .regex(/[A-Z]/, 'Password must include uppercase letters')
-    .regex(/\d/, 'Password must include a number')
-    .regex(/[^A-Za-z0-9]/, 'Password must include a symbol'),
-  twoFactorCode: z.string().regex(/^\d{6}$/, 'Enter the 6-digit authenticator code'),
-});
+function safeReturnUrl(value: unknown, fallback: string) {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('\\')
+  )
+    return fallback;
+  return value;
+}
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { login } = useAdminAuth();
-  const form = useForm<z.infer<typeof adminLoginSchema>>({
-    resolver: zodResolver(adminLoginSchema),
-    defaultValues: {
-      username: '',
-      password: '',
-      twoFactorCode: '',
-    },
+  const { locale } = useLocale();
+  const { isExpired, login } = useAdminAuth();
+  const copy = authCopy[locale].admin;
+  const schema = z.object({
+    username: z.string().min(1, copy.validUsername),
+    password: z.string().min(1, copy.validPassword),
+    twoFactorCode: z.string().regex(/^\d{6}$/, copy.validTwoFactor),
   });
-
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: { username: '', password: '', twoFactorCode: '' },
+  });
   const onSubmit = form.handleSubmit(async (values) => {
+    form.clearErrors('root');
     try {
       await login(values);
-      const returnUrl =
-        typeof router.query.returnUrl === 'string' ? router.query.returnUrl : '/admin/queue';
-      await router.push(returnUrl);
+      await router.push(safeReturnUrl(router.query.returnUrl, '/admin/queue'));
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Invalid username, password, or 2FA code';
+      const message = error instanceof Error ? error.message : '';
       form.setError('root', {
-        message:
-          /2FA/i.test(message) || /authenticator/i.test(message)
-            ? 'The authenticator code is invalid or expired.'
-            : 'The username or password is incorrect.',
+        message: /2FA|two.factor|authenticator/i.test(message)
+          ? copy.invalidTwoFactor
+          : copy.invalidCredentials,
       });
     }
   });
-
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg items-center px-4 py-8">
-      <div className="w-full rounded-[2rem] border border-ink/10 bg-white p-8 shadow-xl">
-        <p className="text-xs uppercase tracking-[0.35em] text-ink/50">Makaan admin</p>
-        <h1 className="mt-3 text-3xl font-semibold">Moderation sign in</h1>
-        <p className="mt-3 text-ink/70">
-          Use your admin username, password, and authenticator code.
+    <main
+      className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10"
+      dir={locale === 'ar' ? 'rtl' : 'ltr'}
+    >
+      <section
+        aria-labelledby="admin-login-title"
+        className="w-full max-w-md rounded-panel border border-border bg-surface-raised p-6 shadow-panel sm:p-8"
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+          {copy.eyebrow}
         </p>
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">Username</span>
+        <h1 className="mt-3 text-3xl font-semibold" id="admin-login-title">
+          {copy.title}
+        </h1>
+        <p className="mt-3 text-ink-muted">{copy.description}</p>
+        {isExpired && (
+          <p
+            className="mt-5 rounded-ui bg-danger/10 px-4 py-3 text-sm text-danger"
+            role="status"
+          >
+            {copy.sessionExpired}
+          </p>
+        )}
+        <form className="mt-7 space-y-5" noValidate onSubmit={onSubmit}>
+          <label className="block" htmlFor="admin-username">
+            <span className="mb-2 block text-sm font-semibold">
+              {copy.username}
+            </span>
             <input
-              className="w-full rounded-2xl border border-ink/10 px-4 py-3 outline-none"
+              autoComplete="username"
+              className="w-full rounded-ui border border-border bg-surface px-4 py-3 outline-none"
+              id="admin-username"
               {...form.register('username')}
             />
-            <p className="mt-2 text-sm text-clay">{form.formState.errors.username?.message}</p>
           </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">Password</span>
+          {form.formState.errors.username && (
+            <p className="text-sm text-danger" role="alert">
+              {form.formState.errors.username.message}
+            </p>
+          )}
+          <label className="block" htmlFor="admin-password">
+            <span className="mb-2 block text-sm font-semibold">
+              {copy.password}
+            </span>
             <input
-              className="w-full rounded-2xl border border-ink/10 px-4 py-3 outline-none"
+              autoComplete="current-password"
+              className="w-full rounded-ui border border-border bg-surface px-4 py-3 outline-none"
+              id="admin-password"
               type="password"
               {...form.register('password')}
             />
-            <p className="mt-2 text-sm text-clay">{form.formState.errors.password?.message}</p>
           </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">2FA code</span>
+          {form.formState.errors.password && (
+            <p className="text-sm text-danger" role="alert">
+              {form.formState.errors.password.message}
+            </p>
+          )}
+          <label className="block" htmlFor="admin-two-factor">
+            <span className="mb-2 block text-sm font-semibold">
+              {copy.twoFactor}
+            </span>
             <input
-              className="w-full rounded-2xl border border-ink/10 px-4 py-3 outline-none"
+              autoComplete="one-time-code"
+              className="w-full rounded-ui border border-border bg-surface px-4 py-3 outline-none"
+              id="admin-two-factor"
               inputMode="numeric"
               maxLength={6}
-              {...form.register('twoFactorCode')}
+              {...form.register('twoFactorCode', {
+                onChange: (event) => {
+                  event.target.value = event.target.value.replace(/\D/g, '');
+                },
+              })}
             />
-            <p className="mt-2 text-sm text-clay">
-              {form.formState.errors.twoFactorCode?.message}
-            </p>
           </label>
-          <p className="text-sm text-clay">{form.formState.errors.root?.message}</p>
+          {form.formState.errors.twoFactorCode && (
+            <p className="text-sm text-danger" role="alert">
+              {form.formState.errors.twoFactorCode.message}
+            </p>
+          )}
+          {form.formState.errors.root && (
+            <p
+              className="rounded-ui bg-danger/10 px-4 py-3 text-sm text-danger"
+              role="alert"
+            >
+              {form.formState.errors.root.message}
+            </p>
+          )}
           <button
-            className="w-full rounded-full bg-ink px-4 py-3 text-sm font-semibold text-white"
+            className="w-full rounded-full bg-primary px-4 py-3 font-semibold text-white transition hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-60"
             disabled={form.formState.isSubmitting}
             type="submit"
           >
-            {form.formState.isSubmitting ? 'Signing in...' : 'Sign in'}
+            {form.formState.isSubmitting ? copy.signingIn : copy.signIn}
           </button>
         </form>
-      </div>
+      </section>
     </main>
   );
 }

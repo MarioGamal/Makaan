@@ -57,10 +57,12 @@ export class CairoAreaService {
       id: row.id,
       name_en: row.name_en,
       name_ar: row.name_ar,
-      bbox: row.bbox
-        .replace(/[{}]/g, '')
-        .split(',')
-        .map(Number) as [number, number, number, number],
+      bbox: row.bbox.replace(/[{}]/g, '').split(',').map(Number) as [
+        number,
+        number,
+        number,
+        number,
+      ],
     }));
 
     await this.redisService.setex(cacheKey, 3600, JSON.stringify(results));

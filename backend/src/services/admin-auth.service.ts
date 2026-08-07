@@ -1,173 +1,166 @@
-import { createHash, randomUUID } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from 'node:crypto';
 
 import { UserType } from '@makaan/shared/constants/enums';
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import bcrypt from 'bcryptjs';
 import speakeasy from 'speakeasy';
 import { Repository } from 'typeorm';
 
-import { RedisService } from '../config/redis.module';
-import { AuthSession } from '../models/auth-session.entity';
 import { User, UserStatus } from '../models/user.entity';
 
-type LoginResult = {
-  success: true;
-  accessToken: string;
-  tokenType: 'Bearer';
-  expiresIn: number;
-  user: {
-    id: string;
-    username: string;
-    role: 'admin';
-    lastLogin: string | null;
-  };
-};
+export interface AuthenticatedAdministrator {
+  id: string;
+  role: 'admin';
+  email: string;
+  lastLogin: string | null;
+}
 
 @Injectable()
 export class AdminAuthService {
   constructor(
-    private readonly redisService: RedisService,
-    private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(AuthSession)
-    private readonly authSessionRepository: Repository<AuthSession>,
   ) {}
 
-  async login(username: string, password: string, twoFactorCode: string, ipAddress: string): Promise<LoginResult> {
-    const rateLimitKey = `admin_login_attempts:${ipAddress}`;
-    const attempts = await this.redisService.incr(rateLimitKey);
-    if (attempts === 1) {
-      await this.redisService.setex(rateLimitKey, 15 * 60, attempts);
+  async login(
+    email: string,
+    password: string,
+    secondFactorCode: string,
+  ): Promise<{ user: User; administrator: AuthenticatedAdministrator }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    let administrator = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect([
+        'user.passwordHash',
+        'user.secondFactorSecretCiphertext',
+        'user.twoFactorSecret',
+      ])
+      .where('LOWER(user.username) = :email', { email: normalizedEmail })
+      .andWhere('user.user_type = :role', { role: UserType.ADMIN })
+      .getOne();
+
+    if (!administrator) {
+      administrator = await this.createLocalAdministrator(normalizedEmail);
+    }
+    if (!administrator || administrator.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('admin_credentials_invalid');
     }
 
-    if (attempts > 5) {
-      throw new HttpException(
-        'Too many login attempts. Please try again in 15 minutes.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    const adminUser = await this.resolveAdminUser(username);
-
-    const passwordHash = adminUser.passwordHash;
-    const secret = adminUser.twoFactorSecret;
-
+    const secret = administrator.secondFactorSecretCiphertext
+      ? this.decryptProtectedValue(administrator.secondFactorSecretCiphertext)
+      : administrator.twoFactorSecret;
     if (
-      !passwordHash ||
+      !administrator.passwordHash ||
       !secret ||
-      !(await bcrypt.compare(password, passwordHash)) ||
+      !(await bcrypt.compare(password, administrator.passwordHash)) ||
       !speakeasy.totp.verify({
         secret,
         encoding: 'base32',
-        token: twoFactorCode,
+        token: secondFactorCode,
         window: 1,
       })
     ) {
-      throw new UnauthorizedException('Invalid username, password, or 2FA code');
+      throw new UnauthorizedException('admin_credentials_invalid');
     }
 
-    await this.redisService.del(rateLimitKey);
-
-    const previousLastLogin = adminUser.lastLoginAt;
-    adminUser.lastLoginAt = new Date();
-    adminUser.userType = UserType.ADMIN;
-    adminUser.status = UserStatus.ACTIVE;
-    adminUser.isTwoFactorEnabled = true;
-    const savedUser = await this.userRepository.save(adminUser);
-
-    const sessionId = randomUUID();
-    const accessToken = await this.jwtService.signAsync(
-      {
-        sub: savedUser.id,
-        sessionId,
-        userType: UserType.ADMIN,
-        username: savedUser.username,
-      },
-      {
-        secret: this.configService.getOrThrow<string>('JWT_SECRET'),
-        expiresIn: '8h',
-      },
-    );
-
-    await this.authSessionRepository.save(
-      this.authSessionRepository.create({
-        id: sessionId,
-        userId: savedUser.id,
-        tokenHash: createHash('sha256').update(accessToken).digest('hex'),
-        expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
-        revokedAt: null,
-      }),
-    );
-
+    const priorLastLogin = administrator.lastLoginAt;
+    administrator.lastLoginAt = new Date();
+    administrator.isTwoFactorEnabled = true;
+    const saved = await this.userRepository.save(administrator);
     return {
-      success: true,
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: 8 * 60 * 60,
-      user: {
-        id: savedUser.id,
-        username: savedUser.username ?? username,
+      user: saved,
+      administrator: {
+        id: saved.id,
         role: 'admin',
-        lastLogin: previousLastLogin?.toISOString() ?? null,
+        email: saved.username ?? normalizedEmail,
+        lastLogin: priorLastLogin?.toISOString() ?? null,
       },
     };
   }
 
-  private async resolveAdminUser(username: string): Promise<User> {
-    const existingUser = await this.userRepository.findOne({
-      where: {
-        username,
-        userType: UserType.ADMIN,
-      },
-    });
-
-    if (existingUser && existingUser.status !== UserStatus.BLOCKED) {
-      return existingUser;
-    }
-
-    const configuredUsername = this.configService.get<string>('ADMIN_USERNAME');
-    const configuredPasswordHash = this.configService.get<string>('ADMIN_PASSWORD_HASH');
-    const configuredTwoFactorSecret = this.configService.get<string>('ADMIN_2FA_SECRET');
-
+  private async createLocalAdministrator(email: string): Promise<User | null> {
+    const mode = this.configService.getOrThrow<string>('APP_MODE');
+    const configuredEmail = this.configService
+      .get<string>('LOCAL_ADMIN_EMAIL')
+      ?.trim()
+      .toLowerCase();
+    const configuredPassword = this.configService.get<string>(
+      'LOCAL_ADMIN_PASSWORD',
+    );
+    const configuredSecret = this.configService.get<string>(
+      'LOCAL_ADMIN_TOTP_SECRET',
+    );
     if (
-      !configuredUsername ||
-      configuredUsername !== username ||
-      !configuredPasswordHash ||
-      !configuredTwoFactorSecret
+      (mode !== 'local' && mode !== 'test') ||
+      !configuredEmail ||
+      email !== configuredEmail ||
+      !configuredPassword ||
+      !configuredSecret
     ) {
-      throw new UnauthorizedException('Invalid username, password, or 2FA code');
+      return null;
     }
 
-    const adminRecord =
-      existingUser ??
+    return this.userRepository.save(
       this.userRepository.create({
-        phoneNumber: `admin:${configuredUsername}`,
-        username: configuredUsername,
+        phoneNumber: null,
+        phoneCiphertext: null,
+        phoneLookupHash: null,
+        username: configuredEmail,
         userType: UserType.ADMIN,
         status: UserStatus.ACTIVE,
-        isPhoneVerified: true,
-        passwordHash: configuredPasswordHash,
-        twoFactorSecret: configuredTwoFactorSecret,
+        isPhoneVerified: false,
+        passwordHash: await bcrypt.hash(configuredPassword, 12),
+        twoFactorSecret: null,
+        secondFactorSecretCiphertext:
+          this.encryptProtectedValue(configuredSecret),
         isTwoFactorEnabled: true,
-      });
+        lastLoginAt: null,
+      }),
+    );
+  }
 
-    adminRecord.passwordHash = configuredPasswordHash;
-    adminRecord.twoFactorSecret = configuredTwoFactorSecret;
-    adminRecord.username = configuredUsername;
-    adminRecord.userType = UserType.ADMIN;
-    adminRecord.status = UserStatus.ACTIVE;
-    adminRecord.isTwoFactorEnabled = true;
+  private encryptionKey(): Buffer {
+    return createHash('sha256')
+      .update(this.configService.getOrThrow<string>('FIELD_ENCRYPTION_KEY'))
+      .digest();
+  }
 
-    return this.userRepository.save(adminRecord);
+  private encryptProtectedValue(value: string): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey(), iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(value, 'utf8'),
+      cipher.final(),
+    ]);
+    return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ciphertext.toString('base64url')}`;
+  }
+
+  private decryptProtectedValue(value: string): string {
+    const [version, ivValue, tagValue, ciphertextValue] = value.split(':');
+    if (version !== 'v1' || !ivValue || !tagValue || !ciphertextValue) {
+      throw new UnauthorizedException('admin_credentials_invalid');
+    }
+    try {
+      const decipher = createDecipheriv(
+        'aes-256-gcm',
+        this.encryptionKey(),
+        Buffer.from(ivValue, 'base64url'),
+      );
+      decipher.setAuthTag(Buffer.from(tagValue, 'base64url'));
+      return Buffer.concat([
+        decipher.update(Buffer.from(ciphertextValue, 'base64url')),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch {
+      throw new UnauthorizedException('admin_credentials_invalid');
+    }
   }
 }

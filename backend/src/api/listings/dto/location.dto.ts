@@ -11,4 +11,3 @@ export class LocationDto {
   @Max(33)
   lng!: number;
 }
-

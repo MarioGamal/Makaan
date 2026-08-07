@@ -1,18 +1,24 @@
 import { FinishingLevel, PropertyType } from '@makaan/shared/constants/enums';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEnum,
   IsIn,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 
-import { ListingPurpose } from '../../../models/listing.entity';
+import {
+  ListingPurpose,
+  PublicLocationMode,
+} from '../../../models/listing.entity';
 
 import { LocationDto } from './location.dto';
 
@@ -44,15 +50,42 @@ export class CreateListingDto {
   @Min(100000)
   priceEgp!: number;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  titleAr?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  titleEn?: string;
+
+  @IsOptional()
+  @IsString()
+  descriptionAr?: string;
+
+  @IsOptional()
+  @IsString()
+  descriptionEn?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(-5)
+  @Max(200)
+  floorNumber?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  amenities?: string[];
+
+  @IsOptional()
+  @IsEnum(PublicLocationMode)
+  publicLocationMode?: PublicLocationMode;
+
   @ValidateNested()
   @Type(() => LocationDto)
   location!: LocationDto;
 
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @Type(() => Boolean)
-  submit?: boolean;
 }

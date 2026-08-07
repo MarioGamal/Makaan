@@ -31,7 +31,16 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- **First-release boundary**: Cairo residential sale/long-term rent only; exclusions remain excluded.
+- **Arabic/mobile first**: Arabic RTL and English LTR behavior and mobile acceptance are defined.
+- **Owner advantage**: Owner-first value, agent labelling/moderation, and owners-only filtering are preserved.
+- **Location integrity/privacy**: Exact internal and approved public precision are explicitly separated.
+- **Moderated quality**: Publication, material edits, expiry, and correction paths retain human review.
+- **Canonical listing**: Duplicate prevention and competing-claim handling are designed.
+- **Security/privacy**: Sessions, authorization, PII, evidence, uploads, and abuse controls are covered.
+- **Human accountability**: Automation is explainable and consequential decisions remain reviewable.
+- **Evidence**: Contract, integration, browser, migration, and clean-setup validation are planned.
+- **Future-category restraint**: Shared capabilities are reusable without prematurely generalizing property.
 
 ## Project Structure
 

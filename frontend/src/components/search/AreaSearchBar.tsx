@@ -1,62 +1,69 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
+import type { PublicArea } from '@makaan/shared/types/marketplace';
+import { useLocale } from '../layout/LocaleProvider';
 import { searchAreas } from '../../services/listings.service';
 
-type AreaSuggestion = {
-  id: string;
-  name_en: string;
-  name_ar: string;
-  bbox: [number, number, number, number];
-};
-
 export function AreaSearchBar({
+  label,
   onSelect,
 }: {
-  onSelect: (area: AreaSuggestion) => void;
+  label: string;
+  onSelect: (area: PublicArea) => void;
 }) {
+  const { locale } = useLocale();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<AreaSuggestion[]>([]);
-
+  const [results, setResults] = useState<PublicArea[]>([]);
+  const listId = useId();
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
       return;
     }
-
-    const timeout = setTimeout(async () => {
-      try {
-        setResults(await searchAreas(query));
-      } catch {
-        setResults([]);
-      }
+    const timeout = window.setTimeout(() => {
+      void searchAreas(query, locale)
+        .then(setResults)
+        .catch(() => setResults([]));
     }, 250);
-
-    return () => clearTimeout(timeout);
-  }, [query]);
-
+    return () => window.clearTimeout(timeout);
+  }, [locale, query]);
   return (
     <div className="relative">
+      <label className="sr-only" htmlFor={listId}>
+        {label}
+      </label>
       <input
-        className="w-full rounded-full border border-ink/10 bg-white/90 px-4 py-3 shadow-sm"
+        aria-autocomplete="list"
+        aria-controls={results.length ? listId : undefined}
+        className="w-full rounded-ui border border-border bg-surface-raised px-4"
+        id={listId}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search Cairo areas"
+        placeholder={label}
         value={query}
       />
-      {results.length > 0 ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-xl">
+      {results.length ? (
+        <div
+          className="absolute inset-x-0 top-[calc(100%+0.4rem)] z-30 overflow-hidden rounded-ui border border-border bg-surface-raised shadow-ui"
+          role="listbox"
+        >
           {results.map((area) => (
             <button
-              className="block w-full border-b border-ink/5 px-4 py-3 text-left text-sm last:border-b-0 hover:bg-sand"
+              className="block w-full border-b border-border px-4 py-3 text-start text-sm last:border-0 hover:bg-surface-muted"
               key={area.id}
               onClick={() => {
-                setQuery(area.name_en);
+                setQuery(locale === 'ar' ? area.nameAr : area.nameEn);
                 setResults([]);
                 onSelect(area);
               }}
+              role="option"
               type="button"
             >
-              <div className="font-medium">{area.name_en}</div>
-              <div className="text-ink/60">{area.name_ar}</div>
+              <span className="font-semibold">
+                {locale === 'ar' ? area.nameAr : area.nameEn}
+              </span>
+              <span className="ms-2 text-ink-muted">
+                {locale === 'ar' ? area.nameEn : area.nameAr}
+              </span>
             </button>
           ))}
         </div>

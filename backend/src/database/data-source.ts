@@ -1,22 +1,34 @@
-import { resolve } from 'path';
+import { readFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 
 import 'reflect-metadata';
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 
-import { AuthSession } from '../models/auth-session.entity';
-import { CairoArea } from '../models/cairo-area.entity';
-import { Listing } from '../models/listing.entity';
-import { Photo } from '../models/photo.entity';
-import { SellerProfile } from '../models/seller-profile.entity';
-import { User } from '../models/user.entity';
+import { parseEnvironment } from '../config/environment';
+import { MAKAAN_ENTITIES } from '../models';
 
-dotenv.config({ path: resolve(__dirname, '../../../.env') });
+const currentDirectory = process.cwd();
+const repositoryRoot =
+  basename(currentDirectory) === 'backend'
+    ? dirname(currentDirectory)
+    : currentDirectory;
+dotenv.config({ path: resolve(repositoryRoot, '.env') });
+
+const environment = parseEnvironment(process.env);
+const ssl =
+  environment.databaseTlsMode === 'verify-full'
+    ? {
+        ca: readFileSync(environment.databaseTlsCaFile as string, 'utf8'),
+        rejectUnauthorized: true as const,
+      }
+    : false;
 
 export default new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL,
-  entities: [User, CairoArea, Listing, Photo, AuthSession, SellerProfile],
-  migrations: ['src/database/migrations/*.ts'],
+  url: environment.databaseUrl,
+  entities: [...MAKAAN_ENTITIES],
+  migrations: [resolve(__dirname, 'migrations/*.{ts,js}')],
   synchronize: false,
+  ssl,
 });

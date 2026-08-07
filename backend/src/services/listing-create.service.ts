@@ -1,30 +1,29 @@
-import {
-  ListingStatus,
-  SellerType,
-} from '@makaan/shared/constants/enums';
+import { ListingStatus } from '@makaan/shared/constants/enums';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { CreateListingDto } from '../api/listings/dto/create-listing.dto';
-import { RedisService } from '../config/redis.module';
 import { CairoArea } from '../models/cairo-area.entity';
 import { Listing, ListingPurpose } from '../models/listing.entity';
 import { Photo } from '../models/photo.entity';
 import { SellerProfile } from '../models/seller-profile.entity';
 
-import { SellerTypeInferenceService } from './seller-type.service';
+import { AbuseControlService } from './abuse-control.service';
+import { deriveEffectiveParticipation } from './participation.service';
 
 @Injectable()
 export class ListingCreateService {
   constructor(
-    private readonly redisService: RedisService,
-    private readonly sellerTypeInferenceService: SellerTypeInferenceService,
+    private readonly abuseControlService: AbuseControlService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     @InjectRepository(Listing)
     private readonly listingRepository: Repository<Listing>,
     @InjectRepository(Photo)
@@ -36,9 +35,6 @@ export class ListingCreateService {
   ) {}
 
   async createDraft(userId: string, dto: CreateListingDto) {
-    const inferredSellerType = await this.sellerTypeInferenceService.inferSellerType(userId);
-    await this.enforceDailyLimit(userId, inferredSellerType);
-
     const areaId = await this.resolveAreaId(dto.location.lng, dto.location.lat);
 
     const listing = await this.listingRepository.save(
@@ -52,7 +48,14 @@ export class ListingCreateService {
         bathrooms: dto.bathrooms,
         finishingLevel: dto.finishingLevel,
         priceEgp: dto.priceEgp,
-        description: dto.description ?? null,
+        description: dto.descriptionAr ?? null,
+        titleAr: dto.titleAr?.trim() || null,
+        titleEn: dto.titleEn?.trim() || null,
+        descriptionAr: dto.descriptionAr?.trim() || null,
+        descriptionEn: dto.descriptionEn?.trim() || null,
+        amenities: dto.amenities ?? [],
+        floorNumber: dto.floorNumber ?? null,
+        sellerPublicLocationMode: dto.publicLocationMode ?? null,
         location: {
           type: 'Point',
           coordinates: [dto.location.lng, dto.location.lat],
@@ -67,21 +70,42 @@ export class ListingCreateService {
     return listing;
   }
 
-  async updateListing(userId: string, listingId: string, dto: CreateListingDto) {
+  async updateListing(
+    userId: string,
+    listingId: string,
+    dto: CreateListingDto,
+    expectedLockVersion?: number,
+  ) {
     const listing = await this.listingRepository.findOne({
       where: { id: listingId, sellerId: userId },
       relations: { photos: true },
     });
 
     if (!listing) {
-      throw new NotFoundException('Listing not found or you do not have permission to edit it.');
+      throw new NotFoundException(
+        'Listing not found or you do not have permission to edit it.',
+      );
     }
 
-    if (![ListingStatus.DRAFT, ListingStatus.REJECTED].includes(listing.status)) {
-      throw new ForbiddenException(`Cannot edit listing with status '${listing.status}'.`);
+    if (
+      expectedLockVersion !== undefined &&
+      listing.lockVersion !== expectedLockVersion
+    ) {
+      throw new ConflictException('listing_version_conflict');
     }
 
-    listing.areaId = await this.resolveAreaId(dto.location.lng, dto.location.lat);
+    if (
+      ![ListingStatus.DRAFT, ListingStatus.REJECTED].includes(listing.status)
+    ) {
+      throw new ForbiddenException(
+        `Cannot edit listing with status '${listing.status}'.`,
+      );
+    }
+
+    listing.areaId = await this.resolveAreaId(
+      dto.location.lng,
+      dto.location.lat,
+    );
     listing.purpose = dto.purpose as ListingPurpose;
     listing.propertyType = dto.propertyType;
     listing.sizeSqm = dto.sizeSqm;
@@ -89,26 +113,143 @@ export class ListingCreateService {
     listing.bathrooms = dto.bathrooms;
     listing.finishingLevel = dto.finishingLevel;
     listing.priceEgp = dto.priceEgp;
-    listing.description = dto.description ?? null;
+    listing.description = dto.descriptionAr ?? null;
+    listing.titleAr = dto.titleAr?.trim() || null;
+    listing.titleEn = dto.titleEn?.trim() || null;
+    listing.descriptionAr = dto.descriptionAr?.trim() || null;
+    listing.descriptionEn = dto.descriptionEn?.trim() || null;
+    listing.amenities = dto.amenities ?? [];
+    listing.floorNumber = dto.floorNumber ?? null;
+    listing.sellerPublicLocationMode = dto.publicLocationMode ?? null;
     listing.location = {
       type: 'Point',
       coordinates: [dto.location.lng, dto.location.lat],
     };
-
-    if (dto.submit) {
-      await this.validateSubmittableListing(listing.id);
-      listing.status = ListingStatus.SUBMITTED;
-      listing.submittedAt = new Date();
-      listing.approvedAt = null;
-      listing.rejectionReason = null;
-    }
+    listing.lockVersion += 1;
 
     return this.listingRepository.save(listing);
   }
 
-  async validateSubmittableListing(listingId: string) {
+  async submitListing(userId: string, listingId: string, lockVersion: number) {
+    await this.validateSubmittableListing(listingId, userId);
+    await this.enforceSubmissionLimit(userId);
+
+    return this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Listing);
+      const listing = await repository
+        .createQueryBuilder('listing')
+        .setLock('pessimistic_write')
+        .where('listing.id = :listingId', { listingId })
+        .andWhere('listing.sellerId = :userId', { userId })
+        .getOne();
+
+      if (!listing) {
+        throw new NotFoundException('listing_not_found');
+      }
+      if (listing.lockVersion !== lockVersion) {
+        throw new ConflictException('listing_version_conflict');
+      }
+      if (
+        ![ListingStatus.DRAFT, ListingStatus.REJECTED].includes(listing.status)
+      ) {
+        throw new ForbiddenException('listing_not_submittable');
+      }
+      if (!listing.titleAr?.trim() || !listing.descriptionAr?.trim()) {
+        throw new BadRequestException({
+          message: 'listing_arabic_content_required',
+          validationErrors: [
+            ...(!listing.titleAr?.trim()
+              ? [{ field: 'titleAr', message: 'Arabic title is required' }]
+              : []),
+            ...(!listing.descriptionAr?.trim()
+              ? [
+                  {
+                    field: 'descriptionAr',
+                    message: 'Arabic description is required',
+                  },
+                ]
+              : []),
+          ],
+        });
+      }
+      if (!listing.sellerPublicLocationMode) {
+        throw new BadRequestException({
+          message: 'public_location_consent_required',
+          validationErrors: [
+            {
+              field: 'publicLocationMode',
+              message: 'Choose approximate or area-only public location',
+            },
+          ],
+        });
+      }
+
+      listing.photos = await manager.getRepository(Photo).find({
+        where: { listingId: listing.id },
+        order: { displayOrder: 'ASC' },
+      });
+
+      const profile = await manager.getRepository(SellerProfile).findOne({
+        where: { userId },
+      });
+      if (!profile) {
+        throw new ForbiddenException('seller_profile_required');
+      }
+
+      const snapshot = {
+        titleAr: listing.titleAr,
+        titleEn: listing.titleEn,
+        descriptionAr: listing.descriptionAr,
+        descriptionEn: listing.descriptionEn,
+        purpose: listing.purpose,
+        propertyType: listing.propertyType,
+        sizeSqm: Number(listing.sizeSqm),
+        bedrooms: listing.bedrooms,
+        bathrooms: listing.bathrooms,
+        finishingLevel: listing.finishingLevel,
+        priceEgp: Number(listing.priceEgp),
+        floorNumber: listing.floorNumber,
+        amenities: listing.amenities,
+        areaId: listing.areaId,
+        publicLocationMode: listing.sellerPublicLocationMode,
+      };
+      const mediaReferences = [...(listing.photos ?? [])]
+        .sort((left, right) => left.displayOrder - right.displayOrder)
+        .map((photo) => ({ id: photo.id, order: photo.displayOrder }));
+      const rows = (await manager.query(
+        `INSERT INTO listing_revisions (
+          listing_id, revision_number, snapshot, exact_location,
+          participation_declaration_version, declared_participation,
+          media_references, change_classification, created_by
+        )
+        SELECT $1,
+          COALESCE((SELECT MAX(revision_number) + 1 FROM listing_revisions WHERE listing_id = $1), 1),
+          $2::jsonb, exact_location, $3, $4, $5::jsonb, 'material', $6
+        FROM listings WHERE id = $1
+        RETURNING id`,
+        [
+          listing.id,
+          JSON.stringify(snapshot),
+          profile.participationDeclarationVersion,
+          profile.declaredParticipation,
+          JSON.stringify(mediaReferences),
+          userId,
+        ],
+      )) as Array<{ id: string }>;
+
+      listing.currentRevisionId = rows[0].id;
+      listing.status = ListingStatus.SUBMITTED;
+      listing.submittedAt = new Date();
+      listing.approvedAt = null;
+      listing.rejectionReason = null;
+      listing.lockVersion += 1;
+      return repository.save(listing);
+    });
+  }
+
+  async validateSubmittableListing(listingId: string, userId?: string) {
     const listing = await this.listingRepository.findOne({
-      where: { id: listingId },
+      where: userId ? { id: listingId, sellerId: userId } : { id: listingId },
       relations: { photos: true },
     });
 
@@ -119,7 +260,10 @@ export class ListingCreateService {
     const validationErrors: Array<{ field: string; message: string }> = [];
 
     if (!listing.location) {
-      validationErrors.push({ field: 'location', message: 'Map pin is required' });
+      validationErrors.push({
+        field: 'location',
+        message: 'Map pin is required',
+      });
     }
 
     const photoCount = listing.photos?.length ?? 0;
@@ -130,7 +274,12 @@ export class ListingCreateService {
       });
     }
 
-    if (!(await this.isWithinCairo(listing.location.coordinates[0], listing.location.coordinates[1]))) {
+    if (
+      !(await this.isWithinCairo(
+        listing.location.coordinates[0],
+        listing.location.coordinates[1],
+      ))
+    ) {
       validationErrors.push({
         field: 'location',
         message: 'Map pin is outside Cairo boundaries',
@@ -140,26 +289,28 @@ export class ListingCreateService {
     if (validationErrors.length > 0) {
       throw new BadRequestException({
         statusCode: 400,
-        message: 'Cannot submit listing. Missing required fields or invalid location.',
+        message:
+          'Cannot submit listing. Missing required fields or invalid location.',
         error: 'Bad Request',
         validationErrors,
       });
     }
   }
 
-  private async enforceDailyLimit(userId: string, sellerType: SellerType) {
-    const key = `listing_rate:${userId}`;
-    const current = await this.redisService.incr(key);
-    if (current === 1) {
-      await this.redisService.setex(key, 60 * 60 * 24, current);
+  private async enforceSubmissionLimit(userId: string): Promise<void> {
+    const profile = await this.sellerProfileRepository.findOne({
+      where: { userId },
+    });
+    if (!profile) {
+      throw new ForbiddenException('seller_profile_required');
     }
-
-    const limit = sellerType === SellerType.AGENT ? 20 : 5;
-    if (current > limit) {
-      throw new ForbiddenException(
-        `Daily listing limit reached (${limit}/day for ${sellerType}s).`,
-      );
-    }
+    const participation = deriveEffectiveParticipation(profile);
+    await this.abuseControlService.consume(
+      participation === 'agent'
+        ? 'agentListingSubmission'
+        : 'ownerListingSubmission',
+      ['seller', userId],
+    );
   }
 
   private async resolveAreaId(lng: number, lat: number) {

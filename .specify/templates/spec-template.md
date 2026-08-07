@@ -5,6 +5,25 @@
 **Status**: Draft  
 **Input**: User description: "$ARGUMENTS"
 
+## Product Fit and Scope *(mandatory)*
+
+**Constitution alignment**: [Explain how the feature preserves owner advantage, transparent agent
+participation, location integrity, moderated quality, privacy, and human accountability as applicable]
+
+**In scope**:
+- [Explicitly bounded capability]
+
+**Out of scope**:
+- [Adjacent capability intentionally excluded]
+
+## Localization, Accessibility, Trust, and Privacy *(mandatory)*
+
+- **Arabic RTL**: [Arabic content and RTL interaction behavior]
+- **English LTR**: [English content and LTR interaction behavior]
+- **Accessibility**: [Keyboard, screen-reader, focus, contrast, motion, and touch requirements]
+- **Trust signals**: [Owner/agent labels, verification meaning, freshness, or moderation visibility]
+- **Location/privacy**: [Public versus private location and personal-data behavior]
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -99,6 +118,16 @@
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
+
+## Assumptions and Dependencies *(mandatory)*
+
+### Assumptions
+
+- [Reasonable product assumption used to bound this specification]
+
+### Dependencies
+
+- [Required existing capability, policy, data, or external service]
 
 ## Success Criteria *(mandatory)*
 

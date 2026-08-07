@@ -1,139 +1,122 @@
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { ListingStatusCard } from '../../components/seller/ListingStatusCard';
+import { AsyncState, Button, Card } from '../../components/ui';
+import { useLocale } from '../../components/layout/LocaleProvider';
+import { sellerCopy } from '../../i18n/seller';
 import { useAuth } from '../../hooks/useAuth';
 import {
+  changeSellerListingStatus,
   getSellerListings,
-  getSellerNotifications,
-  updateSellerListingStatus,
   type SellerManagedListing,
-  type SellerNotification,
 } from '../../services/listings.service';
 
-export default function SellerDashboardPage() {
-  const { user } = useAuth();
-  const [listings, setListings] = useState<SellerManagedListing[]>([]);
-  const [notifications, setNotifications] = useState<SellerNotification[]>([]);
-  const [sellerProfile, setSellerProfile] = useState<{ sellerType: 'owner' | 'agent'; isVerified: boolean } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setIsLoading(true);
-        const [sellerListings, sellerNotifications] = await Promise.all([
-          getSellerListings(),
-          getSellerNotifications(),
-        ]);
-        setListings(sellerListings.listings);
-        setSellerProfile(sellerListings.seller);
-        setNotifications(sellerNotifications.notifications);
-      } catch (fetchError) {
-        const payload = fetchError as { message?: string };
-        setError(payload.message ?? 'Unable to load your dashboard');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void load();
-  }, []);
-
-  const handleStatusChange = async (listingId: string, status: 'sold' | 'inactive') => {
-    const prompt =
-      status === 'sold'
-        ? 'Mark this listing as sold and remove it from the buyer map?'
-        : 'Mark this listing as inactive and remove it from the buyer map?';
-
-    if (!window.confirm(prompt)) {
-      return;
+function Dashboard() {
+  const { locale } = useLocale();
+  const copy = sellerCopy[locale];
+  const { user, csrfToken } = useAuth();
+  const [items, setItems] = useState<SellerManagedListing[]>([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const load = useCallback(async () => {
+    setState('loading');
+    try {
+      setItems((await getSellerListings()).items);
+      setState('ready');
+    } catch {
+      setState('error');
     }
-
-    await updateSellerListingStatus(listingId, status);
-    setListings((current) =>
-      current.map((listing) =>
-        listing.id === listingId ? { ...listing, status } : listing,
-      ),
-    );
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const act = async (
+    listing: SellerManagedListing,
+    action: 'withdraw' | 'mark-sold',
+  ) => {
+    if (
+      !csrfToken ||
+      !window.confirm(
+        action === 'withdraw' ? copy.inactiveConfirm : copy.soldConfirm,
+      )
+    )
+      return;
+    try {
+      const updated = await changeSellerListingStatus(
+        listing.id,
+        action,
+        listing.lockVersion,
+        csrfToken,
+      );
+      setItems((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+    } catch {
+      /* item remains unchanged; card exposes no false success */
+    }
   };
-
+  const participation = user?.participation ?? 'owner_not_verified';
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-8">
+      <section className="rounded-panel bg-primary p-6 text-white shadow-ui md:p-8">
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+          <div>
+            <p className="text-sm font-bold text-primary-soft">
+              {copy.dashboard}
+            </p>
+            <h1 className="mt-2 text-3xl font-bold">{copy.manage}</h1>
+            <p className="mt-3 max-w-xl text-sm text-white/80">
+              {participation === 'declared_agent'
+                ? copy.declaredAgent
+                : `${copy.owner}${participation === 'verified_owner' ? ` · ${copy.verified}` : ''}`}
+            </p>
+          </div>
+          <Link href="/listings/create">
+            <Button className="bg-white text-primary hover:bg-surface-muted">
+              {copy.new}
+            </Button>
+          </Link>
+        </div>
+      </section>
+      <section className="mt-7">
+        {state === 'loading' ? (
+          <AsyncState state="loading" title={copy.loading} />
+        ) : state === 'error' ? (
+          <AsyncState
+            state="error"
+            title={copy.requestFailed}
+            retryLabel={copy.next}
+            onRetry={() => void load()}
+          />
+        ) : items.length === 0 ? (
+          <Card className="py-12 text-center" padding="lg">
+            <h2 className="text-xl font-bold">{copy.emptyTitle}</h2>
+            <p className="mt-2 text-ink-muted">{copy.emptyText}</p>
+            <Link className="mt-5 inline-block" href="/listings/create">
+              <Button>{copy.new}</Button>
+            </Link>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {items.map((item) => (
+              <ListingStatusCard
+                key={item.id}
+                listing={item}
+                onMarkInactive={() => void act(item, 'withdraw')}
+                onMarkSold={() => void act(item, 'mark-sold')}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+export default function SellerDashboardPage() {
   return (
     <ProtectedRoute>
-      <main className="mx-auto min-h-screen max-w-6xl px-4 py-8">
-        <div className="space-y-6">
-          <section className="rounded-[2rem] border border-ink/10 bg-white p-6 shadow-xl">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-ink/50">Seller dashboard</p>
-                <h1 className="mt-2 text-3xl font-semibold">Manage your listings</h1>
-                <div className="mt-3 flex flex-wrap gap-3 text-sm text-ink/70">
-                  <span className="rounded-full bg-sand px-3 py-1">
-                    {(sellerProfile?.sellerType ?? user?.sellerType ?? 'owner').toUpperCase()}
-                  </span>
-                  {sellerProfile?.isVerified ? (
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">
-                      Verified seller
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <Link
-                className="inline-flex rounded-full bg-ink px-4 py-3 text-sm font-semibold text-white"
-                href="/listings/create"
-              >
-                Create New Listing
-              </Link>
-            </div>
-          </section>
-
-          {notifications.length > 0 ? (
-            <section className="rounded-[2rem] border border-rose-200 bg-rose-50 p-6 text-rose-900 shadow-sm">
-              <h2 className="text-xl font-semibold">Recent moderation feedback</h2>
-              <div className="mt-4 space-y-3">
-                {notifications.map((notification) => (
-                  <div className="rounded-[1.5rem] bg-white/70 p-4" key={notification.id}>
-                    <p className="font-semibold">
-                      {notification.listingTitle}: {notification.rejectionReason.replace(/_/g, ' ')}
-                    </p>
-                    <p className="mt-1 text-sm">
-                      {notification.notes ?? 'Open the listing, update it, and resubmit for review.'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {isLoading ? (
-            <section className="rounded-[2rem] border border-ink/10 bg-white p-6 shadow-sm">
-              <p className="text-sm text-ink/60">Loading your listings...</p>
-            </section>
-          ) : error ? (
-            <section className="rounded-[2rem] border border-rose-200 bg-rose-50 p-6 shadow-sm">
-              <p className="text-sm text-rose-900">{error}</p>
-            </section>
-          ) : listings.length === 0 ? (
-            <section className="rounded-[2rem] border border-ink/10 bg-white p-8 text-center shadow-sm">
-              <h2 className="text-2xl font-semibold">No listings yet</h2>
-              <p className="mt-2 text-ink/70">Create your first listing to start reaching buyers.</p>
-            </section>
-          ) : (
-            <section className="space-y-5">
-              {listings.map((listing) => (
-                <ListingStatusCard
-                  key={listing.id}
-                  listing={listing}
-                  onMarkInactive={(listingId) => void handleStatusChange(listingId, 'inactive')}
-                  onMarkSold={(listingId) => void handleStatusChange(listingId, 'sold')}
-                />
-              ))}
-            </section>
-          )}
-        </div>
-      </main>
+      <Dashboard />
     </ProtectedRoute>
   );
 }

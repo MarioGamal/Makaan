@@ -1,14 +1,13 @@
 import { Controller, Get, Query } from '@nestjs/common';
 
-import { CairoAreaService } from '../../services/cairo-area.service';
+import { AreaSearchService } from '../../services/area-search.service';
 
 @Controller('areas')
 export class AreasController {
-  constructor(private readonly cairoAreaService: CairoAreaService) {}
+  constructor(private readonly areaSearch: AreaSearchService) {}
 
-  @Get('search')
-  async searchAreas(@Query('q') query = '') {
-    return this.cairoAreaService.searchAreas(query);
+  @Get()
+  searchAreas(@Query('q') query = '') {
+    return this.areaSearch.search(query);
   }
 }
-

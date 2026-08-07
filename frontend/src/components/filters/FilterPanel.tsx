@@ -1,136 +1,197 @@
 import { PropertyType } from '@makaan/shared/constants/enums';
 
-export type ListingFilters = {
-  area_id?: string;
-  purpose?: 'sale' | 'rent';
-  property_type?: string;
-  min_price?: number;
-  max_price?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  seller_type?: 'owner' | 'agent';
-};
+import { Button, Input, Select } from '../ui';
+import { propertyTypeLabel, type Locale } from '../../i18n';
+import type { ListingSearchParams } from '../../services/listings.service';
 
-const propertyTypes = Object.values(PropertyType);
+export type ListingFilters = Omit<
+  ListingSearchParams,
+  'locale' | 'page' | 'pageSize' | 'areaId' | 'bbox'
+>;
+
+type Copy = Record<string, string>;
 
 export function FilterPanel({
   filters,
+  copy,
+  locale,
   onChange,
   onClear,
 }: {
   filters: ListingFilters;
-  onChange: (nextFilters: ListingFilters) => void;
+  copy: Copy;
+  locale: Locale;
+  onChange: (filters: ListingFilters) => void;
   onClear: () => void;
 }) {
+  const numeric = (
+    key: 'priceMin' | 'priceMax' | 'sizeMin' | 'sizeMax' | 'bedroomsMin',
+    value: string,
+  ) => onChange({ ...filters, [key]: value ? Number(value) : undefined });
+  const activeFilters = Object.entries(filters).filter(
+    ([key, value]) =>
+      key !== 'sort' &&
+      value !== undefined &&
+      (!Array.isArray(value) || value.length > 0),
+  );
   return (
-    <div className="grid gap-3 rounded-3xl border border-ink/10 bg-white/85 p-4 shadow-sm backdrop-blur md:grid-cols-7">
-      <select
-        className="rounded-2xl border border-ink/10 px-3 py-2"
+    <section
+      aria-label={copy.filters}
+      className="grid gap-3 rounded-panel border border-border bg-surface p-4 shadow-ui md:grid-cols-2 xl:grid-cols-4"
+    >
+      <Select
+        aria-label={copy.purpose}
         onChange={(event) =>
           onChange({
             ...filters,
-            purpose: (event.target.value || undefined) as 'sale' | 'rent' | undefined,
+            purpose: (event.target.value ||
+              undefined) as ListingFilters['purpose'],
           })
         }
         value={filters.purpose ?? ''}
       >
-        <option value="">Purpose</option>
-        <option value="sale">Sale</option>
-        <option value="rent">Rent</option>
-      </select>
-      <select
-        className="rounded-2xl border border-ink/10 px-3 py-2"
+        <option value="">{copy.anyPurpose}</option>
+        <option value="sale">{copy.sale}</option>
+        <option value="long_term_rent">{copy.rent}</option>
+      </Select>
+      <Select
+        aria-label={copy.propertyType}
         onChange={(event) =>
           onChange({
             ...filters,
-            property_type: event.target.value || undefined,
+            propertyType: event.target.value ? [event.target.value] : undefined,
           })
         }
-        value={filters.property_type ?? ''}
+        value={filters.propertyType?.[0] ?? ''}
       >
-        <option value="">Property Type</option>
-        {propertyTypes.map((type) => (
+        <option value="">{copy.anyType}</option>
+        {Object.values(PropertyType).map((type) => (
           <option key={type} value={type}>
-            {type}
+            {propertyTypeLabel(locale, type)}
           </option>
         ))}
-      </select>
-      <input
-        className="rounded-2xl border border-ink/10 px-3 py-2"
+      </Select>
+      <Input
+        aria-label={copy.minPrice}
         min={0}
+        onChange={(event) => numeric('priceMin', event.target.value)}
+        placeholder={copy.minPrice}
+        type="number"
+        value={filters.priceMin ?? ''}
+      />
+      <Input
+        aria-label={copy.maxPrice}
+        min={0}
+        onChange={(event) => numeric('priceMax', event.target.value)}
+        placeholder={copy.maxPrice}
+        type="number"
+        value={filters.priceMax ?? ''}
+      />
+      <Input
+        aria-label={copy.minSize}
+        min={0}
+        onChange={(event) => numeric('sizeMin', event.target.value)}
+        placeholder={copy.minSize}
+        type="number"
+        value={filters.sizeMin ?? ''}
+      />
+      <Input
+        aria-label={copy.maxSize}
+        min={0}
+        onChange={(event) => numeric('sizeMax', event.target.value)}
+        placeholder={copy.maxSize}
+        type="number"
+        value={filters.sizeMax ?? ''}
+      />
+      <Input
+        aria-label={copy.bedrooms}
+        min={0}
+        onChange={(event) => numeric('bedroomsMin', event.target.value)}
+        placeholder={copy.bedrooms}
+        type="number"
+        value={filters.bedroomsMin ?? ''}
+      />
+      <Select
+        aria-label={copy.participation}
         onChange={(event) =>
           onChange({
             ...filters,
-            min_price: event.target.value ? Number(event.target.value) : undefined,
+            participation: (event.target.value ||
+              undefined) as ListingFilters['participation'],
           })
         }
-        placeholder="Min price"
-        type="number"
-        value={filters.min_price ?? ''}
-      />
-      <input
-        className="rounded-2xl border border-ink/10 px-3 py-2"
-        min={0}
+        value={filters.participation ?? ''}
+      >
+        <option value="">{copy.anySeller}</option>
+        <option value="verified_owner">{copy.verifiedOwner}</option>
+        <option value="owner_not_verified">{copy.owner}</option>
+        <option value="declared_agent">{copy.agent}</option>
+      </Select>
+      <Select
+        aria-label={copy.sort}
         onChange={(event) =>
           onChange({
             ...filters,
-            max_price: event.target.value ? Number(event.target.value) : undefined,
+            sort: event.target.value as ListingFilters['sort'],
           })
         }
-        placeholder="Max price"
-        type="number"
-        value={filters.max_price ?? ''}
-      />
-      <input
-        className="rounded-2xl border border-ink/10 px-3 py-2"
-        min={0}
-        onChange={(event) =>
-          onChange({
-            ...filters,
-            bedrooms: event.target.value ? Number(event.target.value) : undefined,
-          })
-        }
-        placeholder="Bedrooms"
-        type="number"
-        value={filters.bedrooms ?? ''}
-      />
-      <input
-        className="rounded-2xl border border-ink/10 px-3 py-2"
-        min={0}
-        onChange={(event) =>
-          onChange({
-            ...filters,
-            bathrooms: event.target.value ? Number(event.target.value) : undefined,
-          })
-        }
-        placeholder="Bathrooms"
-        type="number"
-        value={filters.bathrooms ?? ''}
-      />
-      <div className="flex gap-2">
-        <select
-          className="flex-1 rounded-2xl border border-ink/10 px-3 py-2"
-          onChange={(event) =>
-            onChange({
-              ...filters,
-              seller_type: (event.target.value || undefined) as 'owner' | 'agent' | undefined,
-            })
-          }
-          value={filters.seller_type ?? ''}
-        >
-          <option value="">Seller</option>
-          <option value="owner">Owner</option>
-          <option value="agent">Agent</option>
-        </select>
-        <button
-          className="rounded-2xl border border-ink/10 px-4 py-2 text-sm font-medium"
-          onClick={onClear}
-          type="button"
-        >
-          Clear
-        </button>
-      </div>
-    </div>
+        value={filters.sort ?? 'newest'}
+      >
+        <option value="newest">{copy.newest}</option>
+        <option value="price_asc">{copy.priceAsc}</option>
+        <option value="price_desc">{copy.priceDesc}</option>
+      </Select>
+      <Button onClick={onClear} variant="secondary">
+        {copy.reset}
+      </Button>
+      {activeFilters.length > 0 ? (
+        <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-4">
+          {activeFilters.map(([key, value]) => (
+            <button
+              aria-label={`${copy.removeFilter}: ${filterLabel(key, value, copy, locale)}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary-soft px-3 text-sm font-semibold text-primary-strong"
+              key={key}
+              onClick={() =>
+                onChange({ ...filters, [key]: undefined } as ListingFilters)
+              }
+              type="button"
+            >
+              <span>
+                {filterLabel(key, value, copy, locale)}
+              </span>
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
+function filterLabel(
+  key: string,
+  value: unknown,
+  copy: Copy,
+  locale: Locale,
+) {
+  if (key === 'propertyType' && Array.isArray(value)) {
+    return value.map((type) => propertyTypeLabel(locale, type)).join(', ');
+  }
+  const labels: Record<string, string> = {
+    purpose: value === 'sale' ? copy.sale : copy.rent,
+    participation:
+      value === 'verified_owner'
+        ? copy.verifiedOwner
+        : value === 'declared_agent'
+          ? copy.agent
+          : copy.owner,
+    priceMin: copy.minPrice,
+    priceMax: copy.maxPrice,
+    sizeMin: copy.minSize,
+    sizeMax: copy.maxSize,
+    bedroomsMin: copy.bedrooms,
+  };
+  return labels[key]
+    ? `${labels[key]}: ${String(value)}`
+    : String(value);
+}

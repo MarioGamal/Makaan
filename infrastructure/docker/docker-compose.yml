@@ -1,48 +1,50 @@
 services:
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: makaan-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: makaan_dev
-      POSTGRES_PASSWORD: makaan_dev_password_change_in_production
-      POSTGRES_DB: makaan_dev
-      POSTGRES_INITDB_ARGS: "-E UTF8"
+      POSTGRES_USER: ${MAKAAN_POSTGRES_USER:-makaan_dev}
+      POSTGRES_PASSWORD: ${MAKAAN_POSTGRES_PASSWORD:-makaan_dev_password_change_in_production}
+      POSTGRES_DB: ${MAKAAN_POSTGRES_DB:-makaan_dev}
+      POSTGRES_INITDB_ARGS: '-E UTF8'
     ports:
-      - "5433:5432"
+      - '127.0.0.1:${MAKAAN_POSTGRES_PORT:-5433}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U makaan_dev -d makaan_dev"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${MAKAAN_POSTGRES_USER:-makaan_dev} -d ${MAKAAN_POSTGRES_DB:-makaan_dev}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
-    image: redis:7-alpine
-    container_name: makaan-redis
+    image: redis:7.4.2-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '127.0.0.1:${MAKAAN_REDIS_PORT:-6379}:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 3s
       retries: 5
 
   pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: makaan-pgadmin
+    image: dpage/pgadmin4:8.14
+    profiles: ['tools']
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@makaan.dev
       PGADMIN_DEFAULT_PASSWORD: admin123
       PGADMIN_LISTEN_PORT: 5050
     ports:
-      - "5050:5050"
+      - '127.0.0.1:${MAKAAN_PGADMIN_PORT:-5050}:5050'
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
@@ -52,4 +54,3 @@ volumes:
   postgres_data:
   redis_data:
   pgadmin_data:
-

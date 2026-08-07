@@ -1,26 +1,29 @@
 import Link from 'next/link';
-import { useRouter } from 'next/router';
-
+import { useLocale } from '../../components/layout/LocaleProvider';
+import { Button, Card } from '../../components/ui';
+import { sellerCopy } from '../../i18n/seller';
 export default function ListingSubmittedPage() {
-  const router = useRouter();
-  const listingId =
-    typeof router.query.listingId === 'string' ? router.query.listingId : 'pending';
-
+  const { locale } = useLocale();
+  const copy = sellerCopy[locale];
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl items-center px-4 py-8">
-      <div className="w-full rounded-[2rem] border border-ink/10 bg-white p-8 text-center shadow-xl">
-        <p className="text-sm uppercase tracking-[0.25em] text-oasis">Listing Submitted</p>
-        <h1 className="mt-4 text-3xl font-semibold">Your listing is pending admin review</h1>
-        <p className="mt-3 text-ink/70">Listing ID: {listingId}</p>
-        <div className="mt-6 flex justify-center gap-3">
-          <Link className="rounded-full bg-ink px-4 py-3 text-sm font-semibold text-white" href="/seller/dashboard">
-            Seller dashboard
+    <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center px-4 py-8">
+      <Card className="w-full text-center" padding="lg">
+        <p className="text-sm font-bold text-primary">
+          {copy.submittedEyebrow}
+        </p>
+        <h1 className="mt-3 text-3xl font-bold">{copy.submittedTitle}</h1>
+        <p className="mx-auto mt-4 max-w-lg text-ink-muted">
+          {copy.submittedText}
+        </p>
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <Link href="/seller/dashboard">
+            <Button>{copy.goDashboard}</Button>
           </Link>
-          <Link className="rounded-full border border-ink/10 px-4 py-3 text-sm font-semibold" href="/">
-            Browse listings
+          <Link href="/">
+            <Button variant="secondary">{copy.browse}</Button>
           </Link>
         </div>
-      </div>
+      </Card>
     </main>
   );
 }

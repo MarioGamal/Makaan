@@ -47,4 +47,3 @@ export class View {
   @JoinColumn({ name: 'viewer_id' })
   viewer!: User | null;
 }
-

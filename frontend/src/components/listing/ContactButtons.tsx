@@ -1,25 +1,12 @@
-import { getContactRedirectUrl, trackContact } from '../../services/listings.service';
+import { useState } from 'react';
 
-async function openContactLink(id: string, method: 'whatsapp' | 'call') {
-  if (typeof window !== 'undefined') {
-    const url = getContactRedirectUrl(id, method);
-    const popup = method === 'whatsapp' ? window.open('', '_blank', 'noopener,noreferrer') : null;
-
-    try {
-      await trackContact(id, method);
-    } finally {
-      if (method === 'whatsapp') {
-        if (popup) {
-          popup.location.href = url;
-        } else {
-          window.open(url, '_blank', 'noopener,noreferrer');
-        }
-      } else {
-        window.location.href = url;
-      }
-    }
-  }
-}
+import { useLocale } from '../layout/LocaleProvider';
+import { Button } from '../ui/Button';
+import { catalogues } from '../../i18n';
+import {
+  contactIntentResolverUrl,
+  createContactIntent,
+} from '../../services/saved.service';
 
 export function ContactButtons({
   listingId,
@@ -28,29 +15,56 @@ export function ContactButtons({
   listingId: string;
   compact?: boolean;
 }) {
-  const primaryClass = compact
-    ? 'rounded-full bg-ink px-3 py-2 text-sm font-semibold text-white'
-    : 'rounded-full bg-ink px-4 py-3 text-sm font-semibold text-white';
-  const secondaryClass = compact
-    ? 'rounded-full border border-ink/10 px-3 py-2 text-sm font-semibold'
-    : 'rounded-full border border-ink/10 px-4 py-3 text-sm font-semibold';
+  const { locale } = useLocale();
+  const copy = catalogues[locale].marketplace;
+  const [pending, setPending] = useState<'phone' | 'whatsapp' | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const contact = async (channel: 'phone' | 'whatsapp') => {
+    // Opening synchronously keeps the native resolver handoff from being blocked.
+    const handoff = window.open('about:blank', '_blank');
+    if (handoff) handoff.opener = null;
+    setPending(channel);
+    setMessage(null);
+    try {
+      const { token } = await createContactIntent(listingId, channel);
+      const resolverUrl = contactIntentResolverUrl(token);
+      if (handoff) handoff.location.assign(resolverUrl);
+      else window.location.assign(resolverUrl);
+    } catch {
+      handoff?.close();
+      setMessage(copy.contactUnavailable);
+    } finally {
+      setPending(null);
+    }
+  };
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <button
-        className={primaryClass}
-        onClick={() => void openContactLink(listingId, 'whatsapp')}
-        type="button"
-      >
-        WhatsApp
-      </button>
-      <button
-        className={secondaryClass}
-        onClick={() => void openContactLink(listingId, 'call')}
-        type="button"
-      >
-        Call
-      </button>
+    <div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button
+          disabled={pending !== null}
+          fullWidth={compact}
+          loading={pending === 'whatsapp'}
+          onClick={() => void contact('whatsapp')}
+        >
+          {copy.whatsApp}
+        </Button>
+        <Button
+          disabled={pending !== null}
+          fullWidth={compact}
+          loading={pending === 'phone'}
+          onClick={() => void contact('phone')}
+          variant="secondary"
+        >
+          {copy.call}
+        </Button>
+      </div>
+      {message ? (
+        <p className="mt-2 text-xs text-ink-muted" role="status">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

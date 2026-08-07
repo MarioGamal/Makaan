@@ -1,8 +1,20 @@
-import { Inject, Injectable, UnsupportedMediaTypeException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+
+import {
+  Inject,
+  Injectable,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { v2 as Cloudinary, UploadApiResponse } from 'cloudinary';
 import sharp from 'sharp';
 
-import { CLOUDINARY, getListingUploadFolder } from '../config/cloudinary.config';
+import {
+  CLOUDINARY,
+  getListingUploadFolder,
+} from '../config/cloudinary.config';
+import { LocalMediaProvider } from '../services/providers/local/local-media.provider';
+import { resolveRepositoryPath } from '../services/providers/providers.module';
 
 type UploadableImage = {
   buffer: Buffer;
@@ -22,9 +34,25 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class ImageProcessingService {
+  private readonly mediaProvider: 'local' | 'cloudinary';
+  private readonly localMedia?: LocalMediaProvider;
+
   constructor(
     @Inject(CLOUDINARY) private readonly cloudinary: typeof Cloudinary,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.mediaProvider =
+      this.configService.get<string>('MEDIA_PROVIDER') === 'local'
+        ? 'local'
+        : 'cloudinary';
+    if (this.mediaProvider === 'local') {
+      this.localMedia = new LocalMediaProvider(
+        resolveRepositoryPath(
+          this.configService.getOrThrow<string>('LOCAL_MEDIA_ROOT'),
+        ),
+      );
+    }
+  }
 
   async processListingImage(
     file: UploadableImage,
@@ -43,13 +71,35 @@ export class ImageProcessingService {
       .webp({ quality: 85 })
       .toBuffer({ resolveWithObject: true });
 
-    const uploadResponse = await this.uploadToCloudinary(data, listingId, file.originalname);
+    const url = await this.storeProcessedImage(data, listingId);
 
     return {
-      url: uploadResponse.secure_url,
+      url,
       width: info.width,
       height: info.height,
     };
+  }
+
+  /** Deletes only references issued by this service; it never derives a disk path from untrusted input. */
+  async deleteListingImage(url: string): Promise<void> {
+    if (this.mediaProvider === 'local') {
+      const reference = this.parseLocalPreviewUrl(url);
+      if (reference && this.localMedia) {
+        await this.localMedia.delete({
+          namespace: 'listing-media',
+          key: reference,
+        });
+      }
+      return;
+    }
+
+    const publicId = url
+      .split('/upload/')[1]
+      ?.replace(/^[^/]+\//, '')
+      .replace(/\.[^.]+$/, '');
+    if (publicId) {
+      await this.cloudinary.uploader.destroy(publicId);
+    }
   }
 
   private validateFile(file: UploadableImage): void {
@@ -64,10 +114,40 @@ export class ImageProcessingService {
     }
   }
 
+  private async storeProcessedImage(
+    buffer: Buffer,
+    listingId: string,
+  ): Promise<string> {
+    const objectName = `${randomUUID()}.webp`;
+    const key = `${listingId}/${objectName}`;
+    if (this.mediaProvider === 'local') {
+      if (!this.localMedia) {
+        throw new Error('Local media provider is unavailable.');
+      }
+      await this.localMedia.write({
+        namespace: 'listing-media',
+        key,
+        bytes: buffer,
+        contentType: 'image/webp',
+      });
+      return new URL(
+        `/media/listings/${key}`,
+        `http://localhost:${this.configService.getOrThrow<number>('PORT')}`,
+      ).toString();
+    }
+
+    const uploadResponse = await this.uploadToCloudinary(
+      buffer,
+      listingId,
+      objectName,
+    );
+    return uploadResponse.secure_url;
+  }
+
   private async uploadToCloudinary(
     buffer: Buffer,
     listingId: string,
-    originalFilename: string,
+    objectName: string,
   ): Promise<UploadApiResponse> {
     return new Promise((resolve, reject) => {
       const uploadStream = this.cloudinary.uploader.upload_stream(
@@ -75,7 +155,7 @@ export class ImageProcessingService {
           folder: getListingUploadFolder(listingId),
           resource_type: 'image',
           format: 'webp',
-          public_id: originalFilename.replace(/\.[^.]+$/, ''),
+          public_id: objectName.replace(/\.[^.]+$/, ''),
           overwrite: false,
         },
         (error, result) => {
@@ -91,5 +171,18 @@ export class ImageProcessingService {
       uploadStream.end(buffer);
     });
   }
-}
 
+  private parseLocalPreviewUrl(url: string): string | undefined {
+    let pathname: string;
+    try {
+      pathname = new URL(url, 'http://local-preview').pathname;
+    } catch {
+      return undefined;
+    }
+    const match =
+      /^\/media\/listings\/([0-9a-f-]{36}\/[0-9a-f-]{36}\.webp)$/i.exec(
+        pathname,
+      );
+    return match?.[1];
+  }
+}

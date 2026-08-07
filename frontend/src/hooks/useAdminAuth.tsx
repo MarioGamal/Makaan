@@ -1,80 +1,97 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-
-import {
-  ADMIN_STORAGE_KEY,
-  type AdminUser,
-  adminLogin,
-  getStoredAdminAuth,
-  logoutAdmin,
-} from '../services/admin-auth.service';
-
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import * as service from '../services/admin-auth.service';
+import { SessionError, type SessionStatus } from '../services/auth.service';
 type AdminAuthContextValue = {
-  accessToken: string | null;
-  user: AdminUser | null;
+  user: service.AdminUser | null;
+  csrfToken: string | null;
+  status: SessionStatus;
   isAuthenticated: boolean;
   isReady: boolean;
+  isExpired: boolean;
+  error: string | null;
   login: (credentials: {
     username: string;
     password: string;
     twoFactorCode: string;
   }) => Promise<void>;
+  refresh: () => Promise<void>;
   logout: () => Promise<void>;
 };
-
-const AdminAuthContext = createContext<AdminAuthContextValue | undefined>(undefined);
-
+const AdminAuthContext = createContext<AdminAuthContextValue | undefined>(
+  undefined,
+);
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [user, setUser] = useState<AdminUser | null>(null);
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    const stored = getStoredAdminAuth();
-    if (stored) {
-      setAccessToken(stored.accessToken);
-      setUser(stored.user);
+  const [user, setUser] = useState<service.AdminUser | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  const [status, setStatus] = useState<SessionStatus>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const refresh = async () => {
+    setStatus('loading');
+    setError(null);
+    try {
+      const session = await service.getAdminSession();
+      setUser(session.admin);
+      setCsrfToken(session.csrfToken);
+      setStatus('authenticated');
+    } catch (cause) {
+      setUser(null);
+      setCsrfToken(null);
+      if (
+        cause instanceof SessionError &&
+        (cause.code === 'SESSION_EXPIRED' || cause.code === 'UNAUTHENTICATED')
+      )
+        setStatus('expired');
+      else if (cause instanceof SessionError && cause.code === 'REQUEST_FAILED')
+        setStatus('anonymous');
+      else {
+        setStatus('error');
+        setError(
+          cause instanceof Error ? cause.message : 'Unable to check session',
+        );
+      }
     }
-    setIsReady(true);
+  };
+  useEffect(() => {
+    void refresh();
   }, []);
-
   const value = useMemo<AdminAuthContextValue>(
     () => ({
-      accessToken,
       user,
-      isAuthenticated: Boolean(accessToken && user?.role === 'admin'),
-      isReady,
+      csrfToken,
+      status,
+      error,
+      isAuthenticated: status === 'authenticated' && user?.role === 'admin',
+      isReady: status !== 'loading',
+      isExpired: status === 'expired',
+      refresh,
       login: async (credentials) => {
-        const result = await adminLogin(credentials);
-        setAccessToken(result.accessToken);
-        setUser(result.user);
-        window.localStorage.setItem(
-          ADMIN_STORAGE_KEY,
-          JSON.stringify({ accessToken: result.accessToken, user: result.user }),
-        );
+        const session = await service.adminLogin(credentials);
+        setUser(session.admin);
+        setCsrfToken(session.csrfToken);
+        setStatus('authenticated');
+        setError(null);
       },
       logout: async () => {
-        await logoutAdmin();
-        setAccessToken(null);
-        setUser(null);
-        window.localStorage.removeItem(ADMIN_STORAGE_KEY);
+        try {
+          await service.logoutAdmin(csrfToken ?? undefined);
+        } finally {
+          setUser(null);
+          setCsrfToken(null);
+          setStatus('anonymous');
+        }
       },
     }),
-    [accessToken, isReady, user],
+    [csrfToken, error, status, user],
   );
-
-  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
+  return (
+    <AdminAuthContext.Provider value={value}>
+      {children}
+    </AdminAuthContext.Provider>
+  );
 }
-
 export function useAdminAuth() {
   const context = useContext(AdminAuthContext);
-  if (!context) {
+  if (!context)
     throw new Error('useAdminAuth must be used within AdminAuthProvider');
-  }
   return context;
 }

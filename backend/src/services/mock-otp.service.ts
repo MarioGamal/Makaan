@@ -10,15 +10,17 @@ import { OtpService } from './otp.service';
 export class MockOtpService extends OtpService {
   private readonly mockLogger = new Logger(MockOtpService.name);
 
-  constructor(
-    redisService: RedisService,
-    configService: ConfigService,
-  ) {
+  constructor(redisService: RedisService, configService: ConfigService) {
     super(redisService, configService);
   }
 
-  protected override async sendOtp(phone: string, _code: string): Promise<void> {
-    this.mockLogger.log(`[MOCK OTP] Phone: ${this.maskPhone(phone)}, Code: 123456`);
+  protected override async sendOtp(
+    phone: string,
+    _code: string,
+  ): Promise<void> {
+    this.mockLogger.log(
+      `[MOCK OTP] Phone: ${this.maskPhone(phone)}, Code: 123456`,
+    );
   }
 
   override async requestOtp(phone: string) {

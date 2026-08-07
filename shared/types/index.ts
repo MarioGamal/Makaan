@@ -4,13 +4,13 @@ import {
   PropertyType,
   SellerType,
   UserType,
-} from "../constants/enums";
+} from '../constants/enums';
 
 export interface ListingDTO {
   id: string;
   sellerId: string;
   areaId?: string | null;
-  purpose: "sale" | "rent";
+  purpose: 'sale' | 'long_term_rent';
   propertyType: PropertyType;
   sizeSqm: number;
   bedrooms: number;
@@ -33,7 +33,7 @@ export interface UserDTO {
   phoneNumberMasked?: string;
   userType: UserType;
   sellerType?: SellerType;
-  status: "active" | "blocked" | "deactivated";
+  status: 'active' | 'blocked' | 'deactivated';
   isPhoneVerified: boolean;
   createdAt: string;
   lastLoginAt?: string | null;
@@ -47,4 +47,3 @@ export interface CairoAreaDTO {
   parentId?: string | null;
   level: number;
 }
-

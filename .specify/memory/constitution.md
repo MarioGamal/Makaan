@@ -1,21 +1,32 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: [INITIAL] → 1.0.0
-Modified principles: N/A (initial constitution creation)
+Version change: 1.0.0 -> 2.0.0
+Modified principles:
+  - I. Map-First Architecture -> I. Arabic-First, Mobile-First Marketplace
+  - II. Admin-Approved Quality Gate + III. Data Quality Over Volume -> IV. Moderated Quality Before Publication
+  - IV. One Canonical Listing Per Property -> V. One Canonical Listing Per Property
+  - V. Transparent Seller Identity -> II. Owner-First, Transparent Participation
+  - VI. Security & Privacy by Default -> VI. Security and Privacy by Default
+  - VII. AI as Silent Assistant -> VII. Human-Accountable Automation
+Added principles:
+  - III. Location Integrity With Public Privacy
+  - VIII. Evidence Before Completion
 Added sections:
-  - Core Principles (7 principles from PRD)
-  - Security & Privacy Requirements
-  - Data Quality Standards
-  - Development Workflow
-  - Governance
-
+  - First-Release Product Boundary
+  - Marketplace Participation and Ranking
+  - Localization and Accessibility Standards
+  - Architecture and Future Categories
+  - Agent Orchestration and Delegation
+Removed sections:
+  - Standalone Data Quality Standards (consolidated into principles and standards)
 Templates requiring updates:
-  ✅ plan-template.md - Constitution Check section will reference these 7 principles
-  ✅ spec-template.md - Requirements align with data quality and security principles
-  ✅ tasks-template.md - Task categorization reflects security, quality, and approval workflow
-
-Follow-up TODOs: None - all placeholders filled
+  - ✅ .specify/templates/plan-template.md
+  - ✅ .specify/templates/spec-template.md
+  - ✅ .specify/templates/tasks-template.md
+  - ✅ .specify/templates/agent-file-template.md
+  - ✅ CLAUDE.md
+Follow-up TODOs: None
 ==================
 -->
 
@@ -23,233 +34,252 @@ Follow-up TODOs: None - all placeholders filled
 
 ## Core Principles
 
-### I. Map-First Architecture (NON-NEGOTIABLE)
+### I. Arabic-First, Mobile-First Marketplace (NON-NEGOTIABLE)
 
-Every listing MUST have a verified geographic pin on the map. The map is the primary interface and source of truth for property search and discovery.
-
-**Rules:**
-- No listing can be published without a valid map pin
-- All search queries MUST resolve to geographic boundaries
-- Map interface takes precedence over text-based search in UI hierarchy
-- Location accuracy is validated during admin review
-
-**Rationale:** Buyers in Cairo's real estate market need precise location information. Vague addresses waste time and erode trust. Map-first design ensures location is never optional or inaccurate.
-
-### II. Admin-Approved Quality Gate (NON-NEGOTIABLE)
-
-All listings require explicit admin approval before becoming visible to buyers. No automated publishing.
+Arabic and right-to-left presentation MUST be the default product experience. English MUST be a
+complete secondary experience rather than a partial translation. All buyer, owner, agent, and admin
+journeys MUST work on common mobile browsers before they are considered complete.
 
 **Rules:**
-- Default listing state after submission is "pending"
-- Only admin users can transition listings to "active" status
-- Admins MUST validate: location accuracy, data completeness, photo relevance, duplicate risk, spam/scam indicators
-- Rejected listings MUST include a predefined rejection reason
-- Draft and rejected listings remain private to the seller
+- New user-facing requirements MUST define Arabic and English content behavior.
+- Layout, navigation, forms, maps, galleries, and icons MUST be validated in RTL and LTR.
+- Cairo place names MUST retain authoritative Arabic and English forms.
+- Text MUST remain readable without relying on machine translation at display time.
+- Primary controls MUST meet accessible touch-target, keyboard, focus, contrast, and label standards.
 
-**Rationale:** Quality over volume. Manual curation prevents spam, duplicates, and low-quality listings that plague existing Egyptian real estate platforms.
+**Rationale:** The first market is Cairo and the primary audience is Arabic-speaking and mobile-led.
+Localization and mobile usability are product behavior, not post-release polish.
 
-### III. Data Quality Over Volume
+### II. Owner-First, Transparent Participation (NON-NEGOTIABLE)
 
-Structured, complete, accurate listings are prioritized over rapid inventory growth.
-
-**Rules:**
-- All required fields MUST be filled before submission is allowed
-- Required fields: purpose (sale/rent), property type, size, bedrooms, bathrooms, finishing, price, map pin, minimum photo count
-- Incomplete listings cannot be submitted (submission blocked client-side and server-side)
-- Success metrics emphasize data completeness (% valid pins, avg photos/listing) over listing count
-- Duplicate detection MUST be performed during review
-
-**Rationale:** Buyers waste time when data is missing. Sellers who provide complete information get better engagement. Trust is built through consistency.
-
-### IV. One Canonical Listing Per Property
-
-Each unique physical property MUST have only one active listing at any time to prevent broker spam and duplicate postings.
+Makaan exists to give individual property owners a credible direct route to buyers and tenants.
+Professional agents MAY participate, but MUST be declared or detected for review, clearly labelled,
+more heavily moderated, and easy for buyers to exclude.
 
 **Rules:**
-- Admin review includes duplicate detection
-- Same property cannot be listed by multiple sellers simultaneously
-- AI hints assist admins in identifying potential duplicates (location + specs similarity)
-- Sellers cannot repost rejected listings without admin approval
+- Seller identity shown to buyers MUST distinguish verified owner, declared agent, and unverified seller.
+- Buyers MUST have an owners-only filter wherever seller-type filtering is available.
+- Owner listings MUST receive the standard marketplace experience without paid visibility requirements.
+- Agent listings MUST NOT masquerade as owner listings or receive undisclosed ranking advantages.
+- Commercial participation MUST be subject to stricter limits, verification, and moderation policies.
+- Automated classification signals MAY trigger review but MUST NOT be the sole basis for punitive action.
+- Suspected undeclared commercial activity MUST enter manual review with an auditable outcome.
+- Repeated false declarations, duplicate posting, or account circumvention MUST support suspension.
 
-**Rationale:** Duplicate listings from brokers flooding the same property destroys buyer trust and creates noise. One canonical listing per property ensures clarity.
+**Rationale:** Broker impersonation, reposting, and information asymmetry are central problems Makaan
+is designed to reduce. Agents are allowed for inventory breadth, but owner leverage remains the product
+priority.
 
-### V. Transparent Seller Identity
+### III. Location Integrity With Public Privacy (NON-NEGOTIABLE)
 
-Seller type (owner vs agent) is inferred from behavior and disclosed to buyers. No masking of broker activity.
-
-**Rules:**
-- Seller type determined by: listing count, listing frequency, phone number reuse patterns
-- Filters MUST allow buyers to exclude agent listings
-- "Verified seller" badge awarded based on past listing quality and closed deals
-- Agents face stricter rate limits and moderation thresholds
-
-**Rationale:** Buyers in Egypt distrust brokers who masquerade as owners. Transparent seller identity allows informed decisions and builds marketplace credibility.
-
-### VI. Security & Privacy by Default
-
-User data, especially phone numbers and OTPs, MUST be protected. Security is not optional.
+Every listing MUST have an accurate geographic location stored for validation, search, moderation, and
+duplicate detection. Public presentation MUST protect residents and owners from unnecessary disclosure
+of an exact private address.
 
 **Rules:**
-- Phone-based OTP authentication with rate limiting and expiry
-- Secure sessions via HTTP-only cookies
-- Role-based access control (RBAC): users modify only their own listings; admins access moderation endpoints
-- No PII exposed in public APIs
-- Image uploads: jpg/png/webp only, max size enforced, EXIF stripped, server-side resizing
-- Rate limiting on OTP, listing submission, and contact actions
-- Admin accounts require strong passwords and mandatory 2FA
-- Logging MUST mask phone numbers and NEVER log OTPs
-- Account deactivation and listing removal supported for privacy compliance
+- No listing can be submitted or published without a valid location inside the supported boundary.
+- Search by area, map viewport, and future drawn boundary MUST resolve to geographic data.
+- Admins MUST be able to review the submitted exact pin and its declared area.
+- Public maps MUST show an approved precision level appropriate to the property and seller's consent.
+- Exact private-unit location MUST NOT be exposed by default in public APIs, metadata, or analytics.
+- Location changes after approval MUST return the listing to moderation.
 
-**Rationale:** Egyptian users are sensitive to privacy and scams. Security builds trust. Rate limiting and CAPTCHA prevent abuse without harming legitimate users.
+**Rationale:** Accurate geography differentiates Makaan, but accuracy must not create a safety or privacy
+risk. The system can retain an exact source of truth while presenting an approximate public pin.
 
-### VII. AI as Silent Assistant
+### IV. Moderated Quality Before Publication (NON-NEGOTIABLE)
 
-AI assists admins and improves data quality but NEVER makes autonomous decisions or user-facing predictions.
+All listings require explicit admin approval before public visibility. Structured, complete, current,
+and truthful listings take priority over inventory volume.
 
 **Rules:**
-- AI used internally ONLY for: listing quality checks, duplicate likelihood hints, admin review assistance
-- AI does NOT: auto-approve listings, predict prices, chat with users
-- AI recommendations MUST be surfaced to admins as hints, not automatic actions
-- No AI gimmicks or marketing language in user-facing product
+- Submitted listings MUST remain private until approved by an authorized moderator.
+- Required fields MUST be validated on both the client and server.
+- Moderation MUST assess location, seller declaration, completeness, photo relevance, duplicate risk,
+  prohibited content, and scam indicators.
+- Rejection and correction requests MUST use clear reasons visible to the seller.
+- Published listings MUST expire or require periodic availability reconfirmation.
+- Material edits to location, price, seller identity, purpose, or property identity MUST be auditable and
+  MAY require renewed approval.
+- Moderation decisions and status transitions MUST be logged.
 
-**Rationale:** Trust is built through human judgment. AI accelerates admin work but does not replace accountability. Buyers want facts, not algorithmic predictions.
+**Rationale:** Existing volume-led classifieds create buyer fatigue and distrust. Makaan competes through
+consistent information and accountable publication.
 
-## Security & Privacy Requirements
+### V. One Canonical Listing Per Property
 
-### Authentication & Authorization
+Each physical property MUST have no more than one active canonical listing for the same transaction at
+a time.
 
-- Phone OTP with rate limiting (max 3 attempts per 10 minutes per number)
-- OTP expiry: 5 minutes
-- Secure session management via HTTP-only, secure cookies
-- RBAC enforcement at API layer: users can only modify their own resources
-- Admin endpoints require admin role verification
+**Rules:**
+- Duplicate checks MUST consider location, media, property attributes, contact patterns, and history.
+- Potential duplicates MUST be surfaced to moderators with explainable evidence.
+- Automation MUST NOT merge, reject, or transfer a listing without human confirmation.
+- Competing ownership claims MUST suspend publication until reviewed.
+- Reposting, multi-account circumvention, and small attribute changes MUST NOT bypass duplicate policy.
 
-### Data Visibility & Privacy
+**Rationale:** Repeated broker copies make search misleading and prevent buyers from identifying the
+actual source of a property.
 
-- Only approved + active listings visible in public search/browse
-- Draft, pending, and rejected listings MUST NOT appear in public APIs
-- User phone numbers NEVER exposed in listing detail (only via WhatsApp/call intent)
-- Saved listings and view history are private per user
-- Account deactivation MUST remove or anonymize user data and unpublish listings
+### VI. Security and Privacy by Default (NON-NEGOTIABLE)
 
-### File Upload Security
+Authentication, authorization, contact data, identity evidence, location, and uploaded media MUST be
+protected throughout their lifecycle.
 
-- Allowed formats: jpg, png, webp only
-- Max file size: 5MB per image
-- EXIF metadata stripped server-side to prevent location/device leaks
-- Server-side image resizing and compression
-- Object storage (e.g., S3, Cloudinary) for uploaded images
-- Virus/malware scanning for uploads
+**Rules:**
+- User and admin sessions MUST use secure HTTP-only cookies; privileged tokens MUST NOT be stored in
+  browser local storage.
+- Authorization MUST be enforced at the API and data-access layers.
+- Public APIs MUST NOT expose phone numbers, exact private locations, identity documents, or internal
+  moderation signals.
+- OTP, authentication, listing submission, uploads, and contact actions MUST be rate limited.
+- Uploaded media MUST be validated, metadata stripped, safely transformed, and malware checked.
+- Identity and ownership evidence MUST be encrypted, access logged, and retained only as long as needed.
+- Logs MUST mask phone numbers and MUST NOT contain OTPs, tokens, passwords, or document contents.
+- Account deactivation, session revocation, and appropriate data anonymization MUST be supported.
 
-### Abuse Prevention
+**Rationale:** Trust cannot be built by exposing owners to identity theft, unsolicited harvesting,
+account takeover, or exact-location risks.
 
-- Rate limits:
-  - OTP requests: 3 per 10 minutes per phone number
-  - Listing submissions: 5 per day per user (owners), 20 per day (agents)
-  - Contact actions (WhatsApp/call): 50 per day per user
-- CAPTCHA triggered for suspicious activity patterns
-- Admin moderation tools: unpublish listings, block users, track repeat offenders
+### VII. Human-Accountable Automation
 
-### Admin Security
+Automation and AI MAY help with duplicate detection, risk triage, content quality, translation drafting,
+and moderation efficiency, but consequential decisions MUST remain explainable and subject to human
+review.
 
-- Admin accounts separate from seller accounts (no dual roles)
-- Strong password policy enforced (min 12 chars, complexity requirements)
-- Mandatory 2FA for all admin accounts
-- Admin actions logged with timestamp, admin ID, and action type
-- Admin access logs retained for audit
+**Rules:**
+- Automation MUST expose reasons or evidence to authorized reviewers.
+- AI MUST NOT autonomously approve, reject, suspend, price, or classify a seller conclusively.
+- User-facing generated content MUST be identified and reviewable before publication.
+- Sensitive documents MUST NOT be sent to a model or third party without an approved privacy design.
+- Model cost and latency MUST be proportionate; deterministic logic is preferred when sufficient.
 
-### Logging & Monitoring
+**Rationale:** Automation should reduce administrative work without creating opaque or unaccountable
+decisions for owners, buyers, or agents.
 
-- Mask phone numbers in all logs (replace middle digits with ***)
-- NEVER log OTP codes or tokens
-- No sensitive data (passwords, tokens, full phone numbers) in error messages or stack traces
-- Structured logging for security events: failed login attempts, suspicious activity, admin actions
-- Log retention: 90 days minimum for security logs
+### VIII. Evidence Before Completion (NON-NEGOTIABLE)
 
-## Data Quality Standards
+No feature, task, or user story may be marked complete solely because code exists. Completion requires
+proportionate automated tests and an independently repeatable validation path.
 
-### Listing Completeness
+**Rules:**
+- Public contracts MUST have contract tests.
+- Authentication, authorization, listing lifecycle, moderation, search, saving, and contact journeys MUST
+  have integration coverage.
+- Critical buyer and seller journeys MUST have browser coverage in Arabic RTL and English LTR.
+- Security-sensitive changes MUST include negative tests for unauthorized and abusive behavior.
+- Database changes MUST include reversible migrations and clean-database validation.
+- Quickstart instructions MUST be executed from a clean environment before a release candidate.
+- Known gaps MUST be recorded explicitly and MUST NOT be represented as completed work.
 
-- All required fields enforced before submission (client and server validation)
-- Photo minimum: 3 images
-- Photo quality: min resolution 800x600, clear and relevant to property
-- Price MUST be numeric, non-zero, in Egyptian Pounds (EGP)
-- Map pin MUST be within Cairo geographic boundaries (bounding box validation)
+**Rationale:** The original MVP checklist overstated readiness because implementation lacked a
+reproducible environment and tests. Evidence is required to restore reliable delivery status.
 
-### Duplicate Prevention
+## First-Release Product Boundary
 
-- Admin review checks for duplicates based on:
-  - Geographic proximity (within 50 meters)
-  - Matching property specs (type, size, bedrooms, bathrooms within 10% variance)
-  - Same seller phone number
-- AI hints flag potential duplicates with confidence score
-- Admins can merge duplicates or reject redundant listings
+- Geography: Cairo only, using governed boundaries and bilingual area names.
+- Category: residential property only.
+- Transactions: property sale and long-term rent.
+- Primary supply: individual owners; clearly labelled professional agents are permitted.
+- Default experience: Arabic RTL; complete English LTR is required.
+- Currency: Egyptian Pounds.
+- Discovery: area search, list results, map results, and consistent filters.
+- Contact: direct call and WhatsApp intents; no in-app chat is required.
+- Excluded: other governorates, short-term stays, commercial property, off-plan inventory, developer
+  projects, vehicles, and paid ranking products.
 
-### Seller Verification
+Adding an excluded market requires its own specification and constitution check. It MUST NOT be added
+through unrelated implementation work.
 
-- Phone number verified via OTP
-- Seller type inferred from:
-  - Listing count (3+ listings → likely agent)
-  - Listing frequency (2+ listings per week → likely agent)
-  - Phone number reuse in multiple listings → agent
-- Verified badge awarded after: 1 successful sale/rent, no policy violations, 90 days account age
+## Marketplace Participation and Ranking
+
+- Relevance, geographic fit, data completeness, verification, freshness, and policy compliance MUST be
+  the declared ranking inputs for the first release.
+- Seller type MUST be visible on cards and detail pages and available as a filter.
+- Agents MAY be ranked below otherwise-equivalent owner listings, but this MUST be documented and tested.
+- Paid placement, if introduced later, MUST be visibly labelled and MUST NOT conceal organic relevance.
+- Verification badges MUST describe what was verified; one ambiguous "verified" label is prohibited.
+- Seller classification history and moderator overrides MUST be auditable.
+
+## Localization and Accessibility Standards
+
+- Product copy, messages, errors, moderation reasons, and SEO metadata MUST have Arabic and English
+  variants before release.
+- User descriptions MAY remain in their submitted language; unreviewed translations MUST NOT be silently
+  published.
+- Search MUST support normalized Arabic spelling and common Cairo-area variants.
+- Currency, number, date, pluralization, and direction formatting MUST be locale-aware.
+- Acceptance criteria MUST cover keyboard operation, focus, labels, contrast, reduced motion, zoom,
+  screen-reader announcements, and accessible touch targets.
+
+## Architecture and Future Categories
+
+Shared marketplace capabilities—identity, seller participation, moderation, listing lifecycle, media,
+location, saves, contacts, and audit history—SHOULD remain category-neutral where this does not add
+premature complexity. Property attributes and workflows MUST remain property-specific.
+
+Future vehicle support MUST use a separate category specification and vehicle-specific data model. The
+current release MUST NOT generalize property code merely to anticipate vehicles without a concrete need.
+New governorates, off-plan inventory, developers, or cars require explicit migrations, search behavior,
+moderation policy, and UX acceptance criteria.
 
 ## Development Workflow
 
-### Feature Development
+### SpecKit Delivery Sequence
 
-1. All features MUST align with the 7 Core Principles
-2. Features that compromise data quality or security are rejected
-3. New features requiring manual review MUST NOT exceed admin capacity (< 5 min per listing target)
-4. User-facing features MUST work on mobile-first (80% of Egyptian traffic is mobile)
+1. Amend the constitution when a governing product or engineering rule changes.
+2. Create a bounded feature specification describing user value, scope, assumptions, and measurable
+   outcomes without implementation choices.
+3. Clarify only decisions that materially change scope, privacy, security, or user experience.
+4. Produce research, data model, contracts, migration strategy, quickstart, and implementation plan.
+5. Create dependency-ordered tasks with tests and independent checkpoints.
+6. Analyze cross-artifact consistency before implementation.
+7. Implement, integrate, and validate each story before marking it complete.
 
-### Code Review Gates
+### Review Gates
 
-- Security review required for: authentication, authorization, file uploads, PII handling
-- Data quality validation required for: listing creation, search/filter logic, admin moderation flows
-- Privacy review required for: logging, analytics, third-party integrations
-- Performance review required for: map rendering, image loading, search queries
+- Product: owner advantage, agent transparency, scope boundary, and trust signals.
+- Localization: Arabic RTL and English LTR completeness.
+- Security/privacy: authentication, authorization, uploads, PII, exact location, and evidence.
+- Data quality: creation, verification, search, duplicate detection, and moderation.
+- Performance: map rendering, media loading, and result updates on representative mobile devices.
+- Release: clean setup, migrations, automated suites, and primary journey evidence.
 
-### Testing Requirements
+### Agent Orchestration and Delegation
 
-- Contract tests required for all public APIs
-- Integration tests required for: authentication flows, listing approval workflows, search/filter logic
-- Security tests required for: OTP rate limiting, RBAC enforcement, file upload validation
-- Mobile browser testing required for all user-facing features (iOS Safari, Chrome Android)
-
-### Deployment & Rollout
-
-- Feature flags for new features to allow gradual rollout
-- Admin features deployed first to internal team for dogfooding
-- Buyer-facing features require admin team validation before public rollout
-- Rollback plan required for features affecting: search, listing display, authentication
+- The main orchestrator owns product interpretation, architecture, task boundaries, integration,
+  security review, and final completion decisions.
+- Lower-cost agents SHOULD handle bounded mechanical work, isolated components, fixtures, routine tests,
+  documentation synchronization, and well-specified refactors.
+- Stronger reasoning models SHOULD be reserved for ambiguous decisions, architecture, migrations,
+  security/privacy, complex debugging, cross-cutting reviews, and failed integration recovery.
+- Delegated tasks MUST state scope, allowed files, dependencies, acceptance criteria, and verification.
+- Agents MUST NOT edit overlapping files concurrently unless explicitly coordinated.
+- Delegated output is untrusted until reviewed and integrated by the orchestrator.
+- Parallel work MUST follow dependencies; token cost alone MUST NOT justify unsafe or duplicated work.
 
 ## Governance
 
-This constitution supersedes all other development practices and product decisions. Any feature, design, or code change MUST comply with the Core Principles.
+This constitution supersedes conflicting specifications, plans, tasks, documentation, and implementation
+preferences. Every feature and release MUST pass its applicable constitutional gates.
 
 ### Amendment Process
 
-1. Proposed amendment documented with rationale and impact analysis
-2. Amendment requires approval from: product owner, technical lead, at least one admin user
-3. Amendment version incremented per semantic versioning:
-   - MAJOR: Principle removal or redefinition (e.g., removing admin approval requirement)
-   - MINOR: New principle added or section expansion (e.g., adding new security requirement)
-   - PATCH: Clarifications, typo fixes, non-semantic wording improvements
-4. All dependent templates (plan, spec, tasks) updated to reflect amendment
-5. Existing features assessed for compliance with amended constitution
+1. Document the amendment, rationale, affected principles, and migration impact.
+2. Obtain product-owner approval; security/privacy changes also require explicit technical review.
+3. Increment the version using semantic versioning:
+   - MAJOR: removes or incompatibly redefines a principle or product invariant.
+   - MINOR: adds a principle or materially expands enforceable guidance.
+   - PATCH: clarifies wording without changing obligations.
+4. Update dependent SpecKit templates and active feature artifacts.
+5. Audit existing implementation for non-compliance and create remediation tasks.
 
 ### Compliance Review
 
-- All PRs/commits reviewed for constitutional compliance
-- Plan phase MUST include "Constitution Check" gate before implementation
-- Quarterly audit of features for drift from principles
-- Complexity introduced MUST be justified against simpler alternatives in plan documentation
+- Plans MUST include pre-design and post-design Constitution Checks.
+- Specifications MUST identify assumptions, dependencies, exclusions, localization, trust, and privacy.
+- Tasks MUST preserve requirement traceability and include validation work.
+- Exceptions MUST be explicit in Complexity Tracking and approved by the product owner.
+- Quarterly audits SHOULD identify drift, stale documentation, and obsolete policy thresholds.
 
-### Version History
-
-- All amendments tracked in git history with clear commit messages
-- Breaking changes (MAJOR version bumps) require migration plan for existing features
-- Constitution changes communicated to all contributors via team channels
-
-**Version**: 1.0.0 | **Ratified**: 2026-02-22 | **Last Amended**: 2026-02-22
+**Version**: 2.0.0 | **Ratified**: 2026-02-22 | **Last Amended**: 2026-07-20

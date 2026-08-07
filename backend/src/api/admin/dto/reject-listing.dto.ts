@@ -1,12 +1,27 @@
 import { RejectionReason } from '@makaan/shared/constants/enums';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class RejectListingDto {
+  @IsInt()
+  @Min(1)
+  lockVersion!: number;
+
   @IsEnum(RejectionReason)
-  reason!: RejectionReason;
+  reasonCode!: RejectionReason;
 
   @IsOptional()
   @IsString()
   @MaxLength(2000)
-  notes?: string;
+  sellerNote?: string;
+
+  @IsString()
+  @MaxLength(2000)
+  internalReason!: string;
 }

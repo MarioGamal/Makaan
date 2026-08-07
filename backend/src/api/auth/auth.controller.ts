@@ -1,16 +1,28 @@
 import {
   Body,
   Controller,
+  Delete,
+  Get,
   Post,
+  Put,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+import { RequireCsrfScope, CsrfGuard } from '../../middleware/csrf.guard';
+import {
+  RequireSessionScope,
+  SessionGuard,
+  SessionRequest,
+} from '../../middleware/session.guard';
+import { AuthSessionScope } from '../../models/auth-session.entity';
+import { AbuseControlService } from '../../services/abuse-control.service';
 import { AuthService } from '../../services/auth.service';
-import { MockOtpService } from '../../services/mock-otp.service';
-import { OtpService } from '../../services/otp.service';
+import { SessionService } from '../../services/session.service';
 
+import { DeclareParticipationDto } from './dto/declare-participation.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 
@@ -18,41 +30,126 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly otpService: OtpService,
-    private readonly mockOtpService: MockOtpService,
+    private readonly sessionService: SessionService,
+    private readonly abuseControlService: AbuseControlService,
   ) {}
 
-  @Post('otp/request')
-  async requestOtp(@Body() dto: RequestOtpDto) {
-    const service = process.env.NODE_ENV === 'development' ? this.mockOtpService : this.otpService;
-    return service.requestOtp(dto.phone);
+  @Post('otp/requests')
+  async requestOtp(@Body() dto: RequestOtpDto, @Req() request: Request) {
+    const client = this.abuseControlService.clientAddress(request);
+    await this.abuseControlService.consume('otpRequest', ['client', client]);
+    await this.abuseControlService.consume('otpRequest', ['phone', dto.phone]);
+    await this.authService.requestOtp(dto.phone);
+    return { accepted: true };
   }
 
-  @Post('otp/verify')
-  async verifyOtp(@Body() dto: VerifyOtpDto, @Res({ passthrough: true }) response: Response) {
-    const result = await this.authService.verifyOtp(dto.phone, dto.code);
-    response.cookie('makaan_token', result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: result.expiresIn * 1000,
-    });
-
-    return result;
-  }
-
-  @Post('logout')
-  async logout(
-    @Req() request: Request & { cookies?: { makaan_token?: string } },
+  @Post('otp/verifications')
+  async verifyOtp(
+    @Body() dto: VerifyOtpDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const token =
-      request.cookies?.makaan_token ??
-      request.headers.authorization?.replace(/^Bearer\s+/i, '');
+    const client = this.abuseControlService.clientAddress(request);
+    await this.abuseControlService.consume('otpVerification', [
+      'client',
+      client,
+    ]);
+    await this.abuseControlService.consume('otpVerification', [
+      'phone',
+      dto.phone,
+    ]);
+    const result = await this.authService.verifyOtp(dto.phone, dto.code);
+    const issued = await this.sessionService.issue(
+      result.user,
+      AuthSessionScope.SELLER,
+      {
+        ipPrefixHash: this.abuseControlService.protectedClientPrefix(client),
+        userAgentHash: request.headers['user-agent']
+          ? this.abuseControlService.protectedIdentity(
+              request.headers['user-agent'],
+            )
+          : undefined,
+      },
+    );
+    response.cookie(
+      this.sessionService.cookieName(AuthSessionScope.SELLER),
+      issued.sessionToken,
+      this.sessionService.sessionCookieSettings(AuthSessionScope.SELLER),
+    );
+    response.cookie(
+      this.sessionService.csrfCookieName(AuthSessionScope.SELLER),
+      issued.csrfToken,
+      this.sessionService.csrfCookieSettings(AuthSessionScope.SELLER),
+    );
+    return { seller: result.seller };
+  }
 
-    const result = token ? await this.authService.revokeSession(token) : { success: true };
-    response.clearCookie('makaan_token');
-    return result;
+  @Get('session')
+  @UseGuards(SessionGuard)
+  @RequireSessionScope(AuthSessionScope.SELLER)
+  async getSession(@Req() request: SessionRequest) {
+    const session = request.makaanSession!;
+    return {
+      seller: await this.authService.getAuthenticatedSeller(session.userId),
+      expiresAt: session.absoluteExpiresAt.toISOString(),
+    };
+  }
+
+  @Put('participation')
+  @UseGuards(SessionGuard, CsrfGuard)
+  @RequireSessionScope(AuthSessionScope.SELLER)
+  @RequireCsrfScope(AuthSessionScope.SELLER)
+  async declareParticipation(
+    @Body() dto: DeclareParticipationDto,
+    @Req() request: SessionRequest,
+  ) {
+    return {
+      seller: await this.authService.declareParticipation(
+        request.makaanSession!.userId,
+        dto.participation,
+      ),
+    };
+  }
+
+  @Get('csrf')
+  @UseGuards(SessionGuard)
+  @RequireSessionScope(AuthSessionScope.SELLER)
+  async csrf(
+    @Req() request: SessionRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const csrfToken = await this.sessionService.rotateCsrf(
+      request.makaanSession!.id,
+    );
+    response.cookie(
+      this.sessionService.csrfCookieName(AuthSessionScope.SELLER),
+      csrfToken,
+      this.sessionService.csrfCookieSettings(AuthSessionScope.SELLER),
+    );
+    return { csrfToken };
+  }
+
+  @Delete('session')
+  @UseGuards(SessionGuard, CsrfGuard)
+  @RequireSessionScope(AuthSessionScope.SELLER)
+  @RequireCsrfScope(AuthSessionScope.SELLER)
+  async logout(
+    @Req() request: SessionRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const cookieName = this.sessionService.cookieName(AuthSessionScope.SELLER);
+    await this.sessionService.revokeByToken(
+      request.cookies?.[cookieName] as string | undefined,
+      AuthSessionScope.SELLER,
+    );
+    response.clearCookie(
+      cookieName,
+      this.sessionService.sessionCookieSettings(AuthSessionScope.SELLER),
+    );
+    response.clearCookie(
+      this.sessionService.csrfCookieName(AuthSessionScope.SELLER),
+      this.sessionService.csrfCookieSettings(AuthSessionScope.SELLER),
+    );
+    return { success: true };
   }
 }
-

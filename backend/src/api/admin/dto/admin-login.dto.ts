@@ -1,8 +1,8 @@
-import { IsString, Matches, MinLength } from 'class-validator';
+import { IsEmail, IsString, Matches, MinLength } from 'class-validator';
 
 export class AdminLoginDto {
-  @IsString()
-  username!: string;
+  @IsEmail()
+  email!: string;
 
   @IsString()
   @MinLength(12)
@@ -10,5 +10,5 @@ export class AdminLoginDto {
 
   @IsString()
   @Matches(/^\d{6}$/)
-  twoFactorCode!: string;
+  secondFactorCode!: string;
 }

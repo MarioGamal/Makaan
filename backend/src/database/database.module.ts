@@ -1,14 +1,23 @@
-import { Module } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
+
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { AuthSession } from '../models/auth-session.entity';
-import { CairoArea } from '../models/cairo-area.entity';
-import { Listing } from '../models/listing.entity';
-import { Photo } from '../models/photo.entity';
-import { SellerProfile } from '../models/seller-profile.entity';
-import { User } from '../models/user.entity';
+import { MAKAAN_ENTITIES } from '../models';
 
+function databaseSsl(
+  configService: ConfigService,
+): false | { ca: string; rejectUnauthorized: true } {
+  if (configService.getOrThrow<string>('DATABASE_TLS_MODE') !== 'verify-full') {
+    return false;
+  }
+
+  const caFile = configService.getOrThrow<string>('DATABASE_TLS_CA_FILE');
+  return { ca: readFileSync(caFile, 'utf8'), rejectUnauthorized: true };
+}
+
+@Global()
 @Module({
   imports: [
     ConfigModule,
@@ -18,24 +27,23 @@ import { User } from '../models/user.entity';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.getOrThrow<string>('DATABASE_URL'),
-        autoLoadEntities: true,
+        autoLoadEntities: false,
         synchronize: false,
-        logging: configService.get<string>('NODE_ENV') !== 'production',
-        ssl:
-          configService.get<string>('NODE_ENV') === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        // TypeORM query parameters can contain exact property coordinates and
+        // other protected values. Application-level structured logs provide
+        // request diagnostics without serializing SQL parameters.
+        logging: false,
+        ssl: databaseSsl(configService),
         extra: {
           min: 2,
           max: 10,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 5000,
         },
-        entities: [User, CairoArea, Listing, Photo, AuthSession, SellerProfile],
+        entities: [...MAKAAN_ENTITIES],
       }),
     }),
   ],
   exports: [TypeOrmModule],
 })
 export class DatabaseModule {}
-

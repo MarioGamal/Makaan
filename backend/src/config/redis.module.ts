@@ -1,4 +1,10 @@
-import { Global, Inject, Injectable, Module, OnModuleDestroy } from '@nestjs/common';
+import {
+  Global,
+  Inject,
+  Injectable,
+  Module,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -59,4 +65,3 @@ export class RedisService implements OnModuleDestroy {
   exports: [REDIS_CLIENT, RedisService],
 })
 export class RedisModule {}
-

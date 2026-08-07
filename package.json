@@ -8,6 +8,7 @@
     "shared"
   ],
   "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names backend,frontend --prefix-colors blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm --workspace backend run start:dev",
     "dev:frontend": "npm --workspace frontend run dev",
     "build": "npm run build:shared && npm run build:backend && npm run build:frontend",
@@ -17,17 +18,70 @@
     "lint": "npm run lint:backend && npm run lint:frontend",
     "lint:backend": "npm --workspace backend run lint",
     "lint:frontend": "npm --workspace frontend run lint",
-    "format": "npm run format:backend && npm run format:frontend",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "format:backend": "npm --workspace backend run format",
     "format:frontend": "npm --workspace frontend run format",
-    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
-    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down"
+    "typecheck": "npm run typecheck:shared && npm run typecheck:backend && npm run typecheck:frontend",
+    "typecheck:shared": "npm --workspace shared run typecheck",
+    "typecheck:backend": "npm --workspace backend run typecheck",
+    "typecheck:frontend": "npm --workspace frontend run typecheck",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm --workspace backend run test",
+    "test:frontend": "npm --workspace frontend run test",
+    "test:e2e": "playwright test",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "local:up": "bash scripts/local-services.sh up",
+    "local:down": "bash scripts/local-services.sh down",
+    "local:status": "bash scripts/local-services.sh status",
+    "local:tools": "bash scripts/local-services.sh up --tools",
+    "validate:services": "bash scripts/validate-services.sh",
+    "validate:migrations": "bash scripts/validate-services.sh bash scripts/validate-migrations.sh",
+    "db:migrate": "npm run migration:run",
+    "db:migrate:validate": "npm run validate:migrations",
+    "db:seed": "npm --workspace backend run seed",
+    "local:reset-demo": "npm --workspace backend run reset:demo",
+    "local:reset-empty": "npm --workspace backend run reset:empty",
+    "migration:run": "bash scripts/migrations.sh run",
+    "migration:revert": "bash scripts/migrations.sh revert",
+    "docker:up": "npm run local:up",
+    "docker:down": "npm run local:down"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=10.0.0"
+    "node": ">=20.19.0 <21",
+    "npm": ">=10 <11"
   },
+  "packageManager": "npm@10.9.2",
   "dependencies": {
     "mapbox-gl": "^2.15.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@nestjs/common": "11.1.28",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/platform-express": "11.1.28",
+    "@playwright/test": "1.61.1",
+    "concurrently": "9.1.2",
+    "eslint": "9.39.5",
+    "picomatch": "4.0.5",
+    "prettier": "3.9.5",
+    "rxjs": "7.8.1",
+    "typescript": "5.6.3"
+  },
+  "overrides": {
+    "@nestjs/common": "11.1.28",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/platform-express": "11.1.28",
+    "@angular-devkit/core": {
+      "picomatch": "4.0.5"
+    },
+    "fdir": {
+      "picomatch": "4.0.5"
+    },
+    "multer": "2.2.0",
+    "next": {
+      "postcss": "8.5.20"
+    },
+    "postcss": "8.5.20"
   }
 }

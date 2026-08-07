@@ -1,147 +1,208 @@
-import { randomUUID, createHash } from 'crypto';
+import {
+  createCipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+} from 'node:crypto';
 
 import { SellerType, UserType } from '@makaan/shared/constants/enums';
-import {
-  BadRequestException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import bcrypt from 'bcryptjs';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
-
-import { RedisService } from '../config/redis.module';
-import { AuthSession } from '../models/auth-session.entity';
-import { SellerProfile } from '../models/seller-profile.entity';
+import {
+  ParticipationClassificationSource,
+  ParticipationReviewState,
+  SellerProfile,
+  SellerVerificationState,
+} from '../models/seller-profile.entity';
 import { User, UserStatus } from '../models/user.entity';
 
-import { SellerTypeInferenceService } from './seller-type.service';
+import {
+  derivePublicParticipationLabel,
+  PublicParticipationLabel,
+} from './participation.service';
+import { OTP_PROVIDER } from './providers';
+import { OtpProvider } from './providers/otp.provider';
+
+export interface AuthenticatedSeller {
+  id: string;
+  role: 'seller';
+  participation: PublicParticipationLabel;
+  createdAt: string;
+}
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly redisService: RedisService,
-    private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly sellerTypeInferenceService: SellerTypeInferenceService,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(AuthSession)
-    private readonly authSessionRepository: Repository<AuthSession>,
-    @InjectRepository(SellerProfile)
-    private readonly sellerProfileRepository: Repository<SellerProfile>,
+    @InjectDataSource() private readonly dataSource: DataSource,
+    @Inject(OTP_PROVIDER) private readonly otpProvider: OtpProvider,
   ) {}
 
-  async verifyOtp(phone: string, code: string) {
-    const attemptKey = `otp:attempts:${phone}`;
-    const attemptCount = await this.redisService.incr(attemptKey);
-    if (attemptCount === 1) {
-      await this.redisService.setex(attemptKey, 300, attemptCount);
+  async requestOtp(phone: string): Promise<{ accepted: true }> {
+    await this.otpProvider.request({ phone, purpose: 'seller_sign_in' });
+    return { accepted: true };
+  }
+
+  async verifyOtp(
+    phone: string,
+    code: string,
+  ): Promise<{ user: User; seller: AuthenticatedSeller }> {
+    const verification = await this.otpProvider.verify({
+      phone,
+      code,
+      purpose: 'seller_sign_in',
+    });
+    if (verification.status !== 'verified') {
+      throw new BadRequestException('otp_invalid_or_expired');
     }
 
-    if (attemptCount > 5) {
-      throw new UnauthorizedException(
-        'Too many failed attempts. Please request a new OTP code.',
-      );
-    }
+    return this.dataSource.transaction(async (manager) => {
+      const users = manager.getRepository(User);
+      const profiles = manager.getRepository(SellerProfile);
+      const lookupHash = this.phoneLookupHash(phone);
+      let user = await users
+        .createQueryBuilder('user')
+        .addSelect(['user.phoneLookupHash', 'user.phoneNumber'])
+        .leftJoinAndSelect('user.sellerProfile', 'sellerProfile')
+        .where('user.phone_lookup_hash = :lookupHash', { lookupHash })
+        .orWhere('user.legacy_phone_number = :phone', { phone })
+        .getOne();
 
-    const storedHash = await this.redisService.get(`otp:${phone}`);
-    if (!storedHash || !(await bcrypt.compare(code, storedHash))) {
-      throw new BadRequestException('Invalid or expired OTP code');
-    }
+      if (!user) {
+        user = users.create({
+          phoneNumber: null,
+          phoneCiphertext: this.encryptProtectedValue(phone),
+          phoneLookupHash: lookupHash,
+          userType: UserType.SELLER,
+          status: UserStatus.ACTIVE,
+          isPhoneVerified: true,
+          lastLoginAt: new Date(),
+        });
+      } else {
+        user.phoneCiphertext = this.encryptProtectedValue(phone);
+        user.phoneLookupHash = lookupHash;
+        user.phoneNumber = null;
+        user.userType = UserType.SELLER;
+        user.isPhoneVerified = true;
+        user.lastLoginAt = new Date();
+      }
+      user = await users.save(user);
 
-    await this.redisService.del(`otp:${phone}`);
-    await this.redisService.del(attemptKey);
+      let profile = user.sellerProfile;
+      if (!profile) {
+        profile = profiles.create({
+          userId: user.id,
+          declaredParticipation: SellerType.OWNER,
+          listingCount: 0,
+          isVerified: false,
+          verifiedAt: null,
+          participationDeclarationVersion: 1,
+          agentDeclarationConfirmedVersion: null,
+          agentDeclarationConfirmedAt: null,
+          agentDeclarationConfirmedBy: null,
+          classificationSource: ParticipationClassificationSource.SELF_DECLARED,
+          moderatorParticipationOverride: null,
+          reviewState: ParticipationReviewState.CLEAR,
+          verificationState: SellerVerificationState.NOT_VERIFIED,
+          verificationDecidedAt: null,
+          verificationDecidedBy: null,
+        });
+        profile = await profiles.save(profile);
+      }
 
-    let user = await this.userRepository.findOne({
-      where: { phoneNumber: phone },
+      return {
+        user,
+        seller: {
+          id: user.id,
+          role: 'seller',
+          participation: derivePublicParticipationLabel(profile),
+          createdAt: user.createdAt.toISOString(),
+        },
+      };
+    });
+  }
+
+  async getAuthenticatedSeller(userId: string): Promise<AuthenticatedSeller> {
+    const row = await this.dataSource.getRepository(User).findOne({
+      where: { id: userId },
       relations: { sellerProfile: true },
     });
+    if (!row?.sellerProfile) {
+      throw new BadRequestException('seller_profile_required');
+    }
+    return {
+      id: row.id,
+      role: 'seller',
+      participation: derivePublicParticipationLabel(row.sellerProfile),
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
 
-    if (!user) {
-      user = this.userRepository.create({
-        phoneNumber: phone,
-        userType: UserType.SELLER,
-        status: UserStatus.ACTIVE,
-        isPhoneVerified: true,
-        lastLoginAt: new Date(),
+  async declareParticipation(userId: string, participation: SellerType) {
+    return this.dataSource.transaction(async (manager) => {
+      const profiles = manager.getRepository(SellerProfile);
+      const profile = await profiles.findOne({ where: { userId } });
+      if (!profile) {
+        throw new BadRequestException('seller_profile_required');
+      }
+      if (profile.declaredParticipation !== participation) {
+        profile.declaredParticipation = participation;
+        profile.participationDeclarationVersion += 1;
+        profile.classificationSource =
+          ParticipationClassificationSource.SELF_DECLARED;
+        if (participation === SellerType.AGENT) {
+          profile.agentDeclarationConfirmedVersion =
+            profile.participationDeclarationVersion;
+          profile.agentDeclarationConfirmedAt = new Date();
+          profile.agentDeclarationConfirmedBy = userId;
+        } else {
+          profile.agentDeclarationConfirmedVersion = null;
+          profile.agentDeclarationConfirmedAt = null;
+          profile.agentDeclarationConfirmedBy = null;
+        }
+        await profiles.save(profile);
+        await manager.query(
+          `UPDATE listings
+           SET status = 'inactive', lock_version = lock_version + 1, updated_at = now()
+           WHERE seller_id = $1 AND status IN ('pending_review', 'active')`,
+          [userId],
+        );
+      }
+      const user = await manager.getRepository(User).findOneByOrFail({
+        id: userId,
       });
-      user = await this.userRepository.save(user);
-    } else {
-      user.isPhoneVerified = true;
-      user.userType = UserType.SELLER;
-      user.lastLoginAt = new Date();
-      user = await this.userRepository.save(user);
-    }
-
-    const inferredSellerType = await this.sellerTypeInferenceService.inferSellerType(user.id);
-    const accessToken = await this.issueToken(user.id, inferredSellerType);
-
-    return {
-      success: true,
-      accessToken: accessToken.token,
-      tokenType: 'Bearer',
-      expiresIn: 60 * 60 * 24 * 30,
-      user: {
+      return {
         id: user.id,
-        phone: this.maskPhone(phone),
-        role: 'seller',
-        sellerType: inferredSellerType,
+        role: 'seller' as const,
+        participation: derivePublicParticipationLabel(profile),
         createdAt: user.createdAt.toISOString(),
-      },
-      sessionId: accessToken.sessionId,
-    };
+      };
+    });
   }
 
-  async revokeSession(token: string) {
-    const decoded = this.jwtService.decode(token) as { sessionId?: string } | null;
-    if (!decoded?.sessionId) {
-      return { success: true };
-    }
-
-    await this.authSessionRepository.update(
-      { id: decoded.sessionId },
-      { revokedAt: new Date() },
-    );
-
-    return { success: true, message: 'Logged out successfully' };
+  private phoneLookupHash(phone: string): string {
+    return createHmac(
+      'sha256',
+      this.configService.getOrThrow<string>('PHONE_LOOKUP_PEPPER'),
+    )
+      .update(phone)
+      .digest('hex');
   }
 
-  private async issueToken(userId: string, sellerType: SellerType) {
-    const sessionId = randomUUID();
-    const token = await this.jwtService.signAsync(
-      {
-        sub: userId,
-        sessionId,
-        userType: UserType.SELLER,
-        sellerType,
-      },
-      {
-        secret: this.configService.getOrThrow<string>('JWT_SECRET'),
-        expiresIn: '30d',
-      },
-    );
-
-    await this.authSessionRepository.save(
-      this.authSessionRepository.create({
-        id: sessionId,
-        userId,
-        tokenHash: createHash('sha256').update(token).digest('hex'),
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
-        revokedAt: null,
-      }),
-    );
-
-    return {
-      token,
-      sessionId,
-    };
-  }
-
-  private maskPhone(phone: string): string {
-    return phone.replace(/^(\+201\d)(\d{4})(\d{4})$/, '$1****$3');
+  private encryptProtectedValue(value: string): string {
+    const key = createHash('sha256')
+      .update(this.configService.getOrThrow<string>('FIELD_ENCRYPTION_KEY'))
+      .digest();
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(value, 'utf8'),
+      cipher.final(),
+    ]);
+    const tag = cipher.getAuthTag();
+    return `v1:${iv.toString('base64url')}:${tag.toString('base64url')}:${ciphertext.toString('base64url')}`;
   }
 }

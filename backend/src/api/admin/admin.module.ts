@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AdminAction } from '../../models/admin-action.entity';
@@ -10,14 +9,15 @@ import { SellerNotification } from '../../models/seller-notification.entity';
 import { SellerProfile } from '../../models/seller-profile.entity';
 import { User } from '../../models/user.entity';
 import { AdminAuthService } from '../../services/admin-auth.service';
-import { DuplicateDetectionService } from '../../services/duplicate-detection.service';
+import { AuditService } from '../../services/audit.service';
+import { AuthModule } from '../auth/auth.module';
 
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminModerationController } from './admin-moderation.controller';
 
 @Module({
   imports: [
-    JwtModule.register({}),
+    AuthModule,
     TypeOrmModule.forFeature([
       User,
       AuthSession,
@@ -29,6 +29,6 @@ import { AdminModerationController } from './admin-moderation.controller';
     ]),
   ],
   controllers: [AdminAuthController, AdminModerationController],
-  providers: [AdminAuthService, DuplicateDetectionService],
+  providers: [AdminAuthService, AuditService],
 })
 export class AdminModule {}
