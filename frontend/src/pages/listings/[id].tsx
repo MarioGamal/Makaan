@@ -64,7 +64,7 @@ export default function ListingDetailPage({
   return (
     <main className="bg-canvas py-6 md:py-10">
       <div className="mx-auto max-w-7xl space-y-6 px-4 md:px-8">
-        <Link className="text-sm font-semibold text-primary" href="/">
+        <Link className="text-sm font-semibold text-primary" href="/browse">
           ← {copy.back}
         </Link>
         <div className="grid gap-6 lg:grid-cols-[1.45fr_0.85fr]">

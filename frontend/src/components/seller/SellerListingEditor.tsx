@@ -140,8 +140,14 @@ export function SellerListingEditor({
   const allowNavigation = useRef(false);
   const storageKey = `makaan:seller-listing-draft:${listing?.id ?? 'new'}`;
   const labels = [copy.step1, copy.step2, copy.step3, copy.step4, copy.step5];
-  const patch = (values: Partial<FormState>) =>
+  const patch = (values: Partial<FormState>) => {
     setForm((current) => ({ ...current, ...values }));
+    if ('sellerDeclaration' in values) {
+      setIssues((current) =>
+        current.filter((issue) => issue.fieldId !== 'seller-declaration'),
+      );
+    }
+  };
   const issueFor = (fieldId: string) =>
     issues.find((issue) => issue.fieldId === fieldId)?.message;
   const payload = useMemo(
@@ -278,6 +284,15 @@ export function SellerListingEditor({
       });
     }
     return next;
+  };
+  const advanceStep = () => {
+    const stepIssues = validate().filter((issue) => issue.step === step);
+    setIssues(stepIssues);
+    if (stepIssues.length) {
+      focusIssue(stepIssues[0]);
+      return;
+    }
+    setStep((current) => current + 1);
   };
   const saveAndSubmit = async () => {
     setError(null);
@@ -580,7 +595,7 @@ export function SellerListingEditor({
             {copy.back}
           </Button>
           {step < labels.length - 1 ? (
-            <Button onClick={() => setStep((s) => s + 1)}>{copy.next}</Button>
+            <Button onClick={advanceStep}>{copy.next}</Button>
           ) : (
             <Button loading={busy} onClick={() => void saveAndSubmit}>
               {copy.submit}

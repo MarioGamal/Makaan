@@ -69,6 +69,18 @@ production-build, migration/seed, and runtime API smoke checkpoints recorded in
 executing the full Arabic/English browser matrix are deferred; their task items remain open and must be
 completed before a release-acceptance claim.
 
+### 8. Editorial visual evolution
+
+The second visual pass uses Foreal as a directional reference, not a source template. Makaan adopts an
+immersive rounded architectural hero, bolder editorial scale, quieter navigation, more image-led cards, and
+generous section rhythm. It retains the existing design tokens, Cairo palette, Arabic-first RTL behavior,
+accessible controls, real URL-backed search, privacy labels, and owner/agent distinctions. Original local
+imagery replaces copied or hotlinked template assets.
+
+Self-hosted Inter Tight and IBM Plex Sans Arabic provide the editorial typography without third-party font
+requests. Existing semantic weight utilities are remapped so ordinary headings, labels, badges, and buttons
+use 400–500 weights, relying on scale and whitespace rather than pervasive bold text.
+
 ## Delivery sequence
 
 ### Phase A — Reconcile and freeze release-one contracts

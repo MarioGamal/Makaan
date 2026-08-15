@@ -128,12 +128,14 @@ export class PublicListingService {
             (value): value is string => typeof value === 'string',
           )
         : [],
-      media: mediaRows.map((media, index) => ({
-        url: media.url,
-        width: media.width,
-        height: media.height,
-        alt: `${card.title} ${index + 1}`,
-      })),
+      media: mediaRows
+        .filter((media) => this.isPublicMediaUrl(media.url))
+        .map((media, index) => ({
+          url: media.url,
+          width: media.width,
+          height: media.height,
+          alt: `${card.title} ${index + 1}`,
+        })),
       related: [],
     };
   }
@@ -339,7 +341,7 @@ export class PublicListingService {
       },
       participation: row.participation,
       publicLocation: this.publicLocationService.fromApprovedProjection(row),
-      coverImage: row.cover_url
+      coverImage: this.isPublicMediaUrl(row.cover_url)
         ? {
             url: row.cover_url,
             width: row.cover_width ?? 1600,
@@ -353,6 +355,16 @@ export class PublicListingService {
       ).toISOString(),
       saved: false,
     };
+  }
+
+  private isPublicMediaUrl(value: string | null): value is string {
+    if (!value) return false;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return value.startsWith('/media/listings/');
+    }
   }
 
   private appliedFilters(

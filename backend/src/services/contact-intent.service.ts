@@ -118,7 +118,7 @@ export class ContactIntentService {
     const phone = await this.contactDestination(intent.listing_id);
     if (intent.method === 'whatsapp') {
       const text = encodeURIComponent(
-        `مرحباً، أنا مهتم بالعقار المعروض على مكان (${intent.listing_id}).`,
+        `أهلاً، أنا مهتم بالعقار المعروض على مكان (${intent.listing_id}).`,
       );
       return `https://wa.me/${phone.replace(/\D/g, '')}?text=${text}`;
     }

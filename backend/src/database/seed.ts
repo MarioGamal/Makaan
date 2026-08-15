@@ -4,12 +4,15 @@ import {
   createHmac,
   randomBytes,
 } from 'node:crypto';
+import { copyFile, mkdir, stat } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 import { ListingStatus } from '@makaan/shared/constants/enums';
 import bcrypt from 'bcryptjs';
 import { DataSource } from 'typeorm';
 
 import { MAKAAN_ENTITIES } from '../models';
+import { resolveRepositoryPath } from '../services/providers/providers.module';
 
 import { assertLocalDatabaseTarget } from './database-command-safety';
 import {
@@ -42,6 +45,8 @@ function requireLocalSeedEnvironment(databaseUrl?: string): {
   adminEmail: string;
   adminPassword: string;
   adminTotpSecret: string;
+  localMediaRoot: string;
+  publicMediaOrigin: string;
 } {
   const mode = process.env.APP_MODE;
   if (mode !== 'local' && mode !== 'test') {
@@ -62,12 +67,36 @@ function requireLocalSeedEnvironment(databaseUrl?: string): {
     adminPassword:
       process.env.LOCAL_ADMIN_PASSWORD ?? 'local-admin-password-only',
     adminTotpSecret: process.env.LOCAL_ADMIN_TOTP_SECRET ?? 'JBSWY3DPEHPK3PXP',
+    localMediaRoot: resolveRepositoryPath(
+      process.env.LOCAL_MEDIA_ROOT ?? 'infrastructure/local-media',
+    ),
+    publicMediaOrigin: `http://localhost:${process.env.PORT ?? '4000'}`,
   };
+}
+
+async function installDemoMedia(
+  localMediaRoot: string,
+): Promise<Map<string, number>> {
+  const sourceDirectory = resolve(__dirname, 'fixtures', 'media');
+  const targetDirectory = resolve(localMediaRoot, 'listing-media', 'demo');
+  const assetFilenames = [
+    ...new Set(mediaMetadata.map(({ assetFilename }) => assetFilename)),
+  ];
+  await mkdir(targetDirectory, { recursive: true });
+  const installed = await Promise.all(
+    assetFilenames.map(async (assetFilename) => {
+      const target = resolve(targetDirectory, assetFilename);
+      await copyFile(resolve(sourceDirectory, assetFilename), target);
+      return [assetFilename, (await stat(target)).size] as const;
+    }),
+  );
+  return new Map(installed);
 }
 
 /** Seeds deterministic local demonstration records with protected local-only sign-in material. */
 export async function seedDatabase(databaseUrl?: string): Promise<void> {
   const environment = requireLocalSeedEnvironment(databaseUrl);
+  const mediaByteSizes = await installDemoMedia(environment.localMediaRoot);
   const adminPasswordHash = await bcrypt.hash(environment.adminPassword, 12);
   const adminSecondFactorCiphertext = protectedValue(
     environment.adminTotpSecret,
@@ -302,6 +331,10 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
       }
 
       for (const media of mediaMetadata) {
+        const mediaUrl = new URL(
+          media.publicPath,
+          environment.publicMediaOrigin,
+        ).toString();
         await manager.query(
           `INSERT INTO photos (id, listing_id, cloudinary_url, display_order, original_filename, width, height, created_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -311,7 +344,7 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
           [
             media.id,
             media.listingId,
-            media.cloudinaryUrl,
+            mediaUrl,
             media.displayOrder,
             media.originalFilename,
             media.width,
@@ -327,8 +360,8 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
              approved_derivative_reference, detected_mime, byte_size, width, height,
              sha256_digest, perceptual_hash, scan_state, scan_engine, scanned_at,
              display_order, created_at, deleted_at)
-           VALUES ($1, $2, $3, $4, 1, $5, 'image/jpeg', 262144, $6, $7,
-             $8, $9, 'clean', 'deterministic-local', $10, $11, $10, NULL)
+           VALUES ($1, $2, $3, $4, 1, $5, 'image/webp', $6, $7, $8,
+             $9, $10, 'clean', 'deterministic-local', $11, $12, $11, NULL)
            ON CONFLICT (id) DO UPDATE SET revision_id = EXCLUDED.revision_id,
              source_object_reference_ciphertext = EXCLUDED.source_object_reference_ciphertext,
              source_key_version = EXCLUDED.source_key_version,
@@ -344,10 +377,11 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
             media.listingId,
             listing.revisionId,
             protectedValue(
-              `listing-media/${media.listingId}/${media.originalFilename}`,
+              `listing-media/demo/${media.assetFilename}`,
               environment.fieldEncryptionKey,
             ),
-            media.cloudinaryUrl,
+            mediaUrl,
+            mediaByteSizes.get(media.assetFilename) ?? 0,
             media.width,
             media.height,
             createHash('sha256')

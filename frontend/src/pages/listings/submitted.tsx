@@ -19,7 +19,7 @@ export default function ListingSubmittedPage() {
           <Link href="/seller/dashboard">
             <Button>{copy.goDashboard}</Button>
           </Link>
-          <Link href="/">
+          <Link href="/browse">
             <Button variant="secondary">{copy.browse}</Button>
           </Link>
         </div>

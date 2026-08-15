@@ -161,7 +161,7 @@ export const demoListings = [
     finishingLevel: FinishingLevel.FULLY_FINISHED,
     priceEgp: 7800000,
     description:
-      'شقة سكنية للبيع في المعادي. الموقع العام: المعادي فقط؛ تفاصيل الوحدة الدقيقة متاحة للمراجعة الداخلية.',
+      'شقة للبيع في المعادي من مالك متحقق منه. اللي بيظهر للناس: المعادي بس؛ تفاصيل الوحدة بالظبط عند فريق المراجعة.',
     locationWkt: 'POINT(31.265 29.960)',
     publicLocationWkt: 'POINT(31.267 29.960)',
     publicLocationDistanceM: 193,
@@ -185,7 +185,7 @@ export const demoListings = [
     finishingLevel: FinishingLevel.LUXURY_FINISHED,
     priceEgp: 65000,
     description:
-      'دوبلكس للإيجار طويل الأجل في القاهرة الجديدة بواسطة وكيل معلن. الموقع العام: القاهرة الجديدة فقط.',
+      'دوبلكس للإيجار طويل الأجل في القاهرة الجديدة من وسيط معلن. اللي بيظهر للناس: القاهرة الجديدة بس.',
     locationWkt: 'POINT(31.440 30.040)',
     publicLocationWkt: null,
     publicLocationDistanceM: null,
@@ -208,8 +208,7 @@ export const demoListings = [
     bathrooms: 1,
     finishingLevel: FinishingLevel.SEMI_FINISHED,
     priceEgp: 4900000,
-    description:
-      'شقة سكنية قيد المراجعة في مصر الجديدة؛ لا تظهر في البحث العام.',
+    description: 'شقة في مصر الجديدة مستنية المراجعة ولسه مش ظاهرة في البحث.',
     locationWkt: 'POINT(31.325 30.095)',
     publicLocationWkt: null,
     publicLocationDistanceM: null,
@@ -232,7 +231,7 @@ export const demoListings = [
     bathrooms: 1,
     finishingLevel: FinishingLevel.FULLY_FINISHED,
     priceEgp: 22000,
-    description: 'مثال خاص مرفوض لاختبار رسائل المراجعة؛ لا يظهر للعامة.',
+    description: 'مثال إعلان اترفض علشان نختبر رسائل المراجعة؛ مش ظاهر للناس.',
     locationWkt: 'POINT(31.270 29.955)',
     publicLocationWkt: null,
     publicLocationDistanceM: null,
@@ -246,17 +245,27 @@ export const demoListings = [
   },
 ] as const;
 
-export const mediaMetadata = demoListings.flatMap((listing, listingIndex) =>
-  [0, 1, 2].map((displayOrder) => ({
+const listingMediaAssets: Record<(typeof demoListings)[number]['id'], string> =
+  {
+    [DEMO_IDS.maadiSale]: 'maadi-apartment.webp',
+    [DEMO_IDS.newCairoRent]: 'new-cairo-duplex.webp',
+    [DEMO_IDS.heliopolisPending]: 'heliopolis-apartment.webp',
+    [DEMO_IDS.maadiRejected]: 'maadi-studio.webp',
+  };
+
+export const mediaMetadata = demoListings.flatMap((listing, listingIndex) => {
+  const assetFilename = listingMediaAssets[listing.id];
+  return [0, 1, 2].map((displayOrder) => ({
     id: `50000000-0000-4000-8000-${String(listingIndex * 3 + displayOrder + 1).padStart(12, '0')}`,
     listingId: listing.id,
-    cloudinaryUrl: `local-fixture://media/${listing.id}/${displayOrder + 1}.jpg`,
+    assetFilename,
+    publicPath: `/media/listings/demo/${assetFilename}`,
     displayOrder,
-    originalFilename: `fixture-${displayOrder + 1}.jpg`,
-    width: 1600,
-    height: 1067,
-  })),
-);
+    originalFilename: assetFilename,
+    width: 1536,
+    height: 1024,
+  }));
+});
 
 export const moderationFixtures = [
   {
@@ -264,20 +273,20 @@ export const moderationFixtures = [
     actionType: 'approve',
     targetListingId: DEMO_IDS.maadiSale,
     reason: 'fixture_approved_verified_owner',
-    notes: 'قرار تجريبي: مالك موثّق، موقع عام على مستوى المنطقة فقط.',
+    notes: 'قرار تجريبي: مالك متحقق منه، والمكان العام على مستوى المنطقة بس.',
   },
   {
     id: DEMO_IDS.approveAgentAction,
     actionType: 'approve',
     targetListingId: DEMO_IDS.newCairoRent,
     reason: 'fixture_approved_declared_agent',
-    notes: 'قرار تجريبي: وكيل معلن وموسوم بوضوح بعد مراجعة يدوية.',
+    notes: 'قرار تجريبي: وسيط معلن ومكتوب بوضوح بعد مراجعة يدوية.',
   },
   {
     id: DEMO_IDS.rejectAction,
     actionType: 'reject',
     targetListingId: DEMO_IDS.maadiRejected,
     reason: 'incomplete_data',
-    notes: 'قرار تجريبي: يلزم استكمال بيانات السكن قبل إعادة الإرسال.',
+    notes: 'قرار تجريبي: محتاج يكمل بيانات السكن قبل ما يبعت الإعلان تاني.',
   },
 ] as const;

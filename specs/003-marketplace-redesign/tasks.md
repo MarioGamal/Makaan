@@ -83,6 +83,15 @@ runtime smoke evidence in `evidence/release-one.md`.
 - [ ] T055 Execute clean reset and all release-one browser journeys; record evidence in `specs/003-marketplace-redesign/evidence/release-one.md`
 - [x] T056 Move canonical property, duplicate/dispute, evidence operations, retention automation, performance scale, and database-role hardening into `specs/003-marketplace-redesign/post-release.md`
 
+## Phase H — Foreal-inspired editorial UI evolution
+
+- [x] T057 Record the approved Foreal-inspired visual direction and its Makaan-specific adaptation boundaries in the feature specification and plan
+- [x] T058 Redesign the public header, Cairo hero, integrated purpose/area search, listings heading, property-card rhythm, and trust panels with original local imagery
+- [ ] T059 Extend the editorial image-led system to public listing detail, gallery, save/contact presentation, and mobile layout
+- [ ] T060 Extend the visual system to seller authentication, dashboard, editor steps, success, error, and moderation-feedback states
+- [ ] T061 Extend the visual system to moderator queue and review detail without reducing information density or decision clarity
+- [ ] T062 Perform Arabic/English desktop/mobile visual review for crop behavior, text wrapping, contrast, focus, reduced motion, empty images, and 200% zoom
+
 ## Dependency order
 
 ```text
@@ -92,6 +101,7 @@ A contract freeze
   → D save/contact
   → E seller
   → F moderator
+  → H editorial UI evolution
   → G acceptance
 ```
 

@@ -59,10 +59,9 @@ export async function sellerRequest(
 }
 
 export async function requestOtp(phone: string, locale: 'ar' | 'en' = 'ar') {
-  void locale;
   const response = await sellerRequest('auth/otp/requests', {
     method: 'POST',
-    body: JSON.stringify({ phone }),
+    body: JSON.stringify({ phone, locale }),
   });
   return response.json() as Promise<{ accepted: true }>;
 }

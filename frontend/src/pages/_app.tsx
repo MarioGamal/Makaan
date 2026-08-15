@@ -6,6 +6,10 @@ import { AuthProvider } from '../hooks/useAuth';
 import { AppShell } from '../components/layout/AppShell';
 import { LocaleProvider } from '../components/layout/LocaleProvider';
 import { localeFromCookie } from '../utils/locale';
+import '@fontsource-variable/inter-tight/wght.css';
+import '@fontsource/ibm-plex-sans-arabic/arabic-400.css';
+import '@fontsource/ibm-plex-sans-arabic/arabic-500.css';
+import '@fontsource/ibm-plex-sans-arabic/arabic-600.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import '../styles/globals.css';
 

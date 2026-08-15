@@ -48,6 +48,17 @@ visual language uses warm neutral surfaces inspired by Cairo stone, deep green/t
 Arabic typography, restrained elevation, large property imagery, clear price hierarchy, and generous
 mobile touch targets. The map supports discovery but never becomes the only way to understand results.
 
+The approved second-pass reference is Foreal by Stacy More on the Framer Marketplace. Makaan may draw from
+its immersive architectural photography, oversized editorial type, rounded framing, restrained navigation,
+and image-led listing rhythm, but must not copy its brand, composition, assets, or agency positioning. The
+adaptation remains an owner-first Cairo marketplace: functional area/purpose search is prominent in the hero,
+trust and participation labels stay explicit, Arabic typography is designed rather than mirrored, and ordinary
+residential inventory must feel as credible as premium homes.
+
+Typography uses self-hosted Inter Tight for English and IBM Plex Sans Arabic for Arabic. Display hierarchy
+comes from scale, spacing, and a restrained 400–500 weight range; 600 is reserved for exceptional emphasis.
+Arabic display sizes and line heights are tuned independently to avoid dense, oversized blocks.
+
 ### Global experience requirements
 
 - A consistent responsive header, locale switcher, saved-listing access, seller entry point, and footer.

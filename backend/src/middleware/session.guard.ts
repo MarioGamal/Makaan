@@ -59,7 +59,7 @@ export class SessionGuard implements CanActivate {
           }
         }
       }
-      throw new UnauthorizedException('session_invalid');
+      throw new UnauthorizedException('authentication_required');
     }
 
     request.makaanSession = await this.sessionService.authenticate(

@@ -26,11 +26,16 @@ function toWesternDigits(value: string) {
   );
 }
 
+function toArabicDigits(value: string) {
+  return value.replace(/\d/g, (digit) => '٠١٢٣٤٥٦٧٨٩'[Number(digit)]);
+}
+
 export default function PhoneAuthPage() {
   const router = useRouter();
   const { locale } = useLocale();
   const { isExpired, login } = useAuth();
   const copy = authCopy[locale].seller;
+  const isRegistration = router.query.mode === 'register';
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -114,13 +119,15 @@ export default function PhoneAuthPage() {
         className="w-full max-w-md rounded-panel border border-border bg-surface-raised p-6 shadow-panel sm:p-8"
       >
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-          {copy.eyebrow}
+          {isRegistration ? copy.registerEyebrow : copy.eyebrow}
         </p>
         <h1 className="mt-3 text-3xl font-semibold" id="seller-login-title">
-          {copy.title}
+          {isRegistration ? copy.registerTitle : copy.title}
         </h1>
-        <p className="mt-3 text-ink-muted">{copy.description}</p>
-        {isExpired && (
+        <p className="mt-3 text-ink-muted">
+          {isRegistration ? copy.registerDescription : copy.description}
+        </p>
+        {isExpired && !isRegistration && (
           <p
             className="mt-5 rounded-ui bg-danger/10 px-4 py-3 text-sm text-danger"
             role="status"
@@ -137,21 +144,29 @@ export default function PhoneAuthPage() {
               <span className="mb-2 block text-xs text-ink-muted">
                 {copy.phoneHint}
               </span>
-              <div className="flex overflow-hidden rounded-ui border border-border bg-surface">
+              <div
+                className="flex overflow-hidden rounded-ui border border-border bg-surface"
+                dir="ltr"
+              >
                 <span
                   aria-hidden="true"
                   className="flex items-center border-e border-border px-4 text-ink-muted"
-                  dir="ltr"
                 >
-                  +20
+                  {locale === 'ar' ? '+٢٠' : '+20'}
                 </span>
                 <input
                   autoComplete="tel-national"
                   className="min-w-0 flex-1 bg-transparent px-4 py-3 outline-none"
+                  dir="ltr"
                   id="seller-phone"
                   inputMode="tel"
                   onChange={(event) => {
-                    phoneForm.setValue('phone', event.target.value);
+                    phoneForm.setValue(
+                      'phone',
+                      locale === 'ar'
+                        ? toArabicDigits(event.target.value)
+                        : event.target.value,
+                    );
                     phoneForm.clearErrors('phone');
                   }}
                   placeholder={copy.phonePlaceholder}
@@ -175,7 +190,11 @@ export default function PhoneAuthPage() {
               disabled={isRequesting}
               type="submit"
             >
-              {isRequesting ? copy.sending : copy.send}
+              {isRequesting
+                ? copy.sending
+                : isRegistration
+                  ? copy.registerSend
+                  : copy.send}
             </button>
           </form>
         ) : (
@@ -222,7 +241,11 @@ export default function PhoneAuthPage() {
                   ref={(element) => {
                     otpInputs.current[index] = element;
                   }}
-                  value={otpValue[index] ?? ''}
+                  value={
+                    locale === 'ar'
+                      ? toArabicDigits(otpValue[index] ?? '')
+                      : (otpValue[index] ?? '')
+                  }
                 />
               ))}
             </div>

@@ -4,6 +4,14 @@ const config: Config = {
   content: ['./src/pages/**/*.{ts,tsx}', './src/components/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['IBM Plex Sans Arabic', 'Inter Tight', 'Arial', 'sans-serif'],
+        display: ['IBM Plex Sans Arabic', 'Inter Tight', 'Arial', 'sans-serif'],
+      },
+      fontWeight: {
+        semibold: '500',
+        bold: '600',
+      },
       colors: {
         canvas: 'var(--color-canvas)',
         surface: 'var(--color-surface)',

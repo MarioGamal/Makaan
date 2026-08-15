@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useState } from 'react';
 
 import type {
   ParticipationLabel,
@@ -33,18 +34,23 @@ export function PublicListingCard({
 }) {
   const area = locale === 'ar' ? listing.area.nameAr : listing.area.nameEn;
   const label = labels[listing.participation];
+  const [imageBroken, setImageBroken] = useState(false);
   return (
-    <Card as="article" className="group overflow-hidden p-0">
+    <Card
+      as="article"
+      className="group overflow-hidden border-0 bg-transparent p-0 shadow-none"
+    >
       <Link
         aria-label={listing.title}
         className="block"
         href={`/listings/${listing.id}`}
       >
-        <div className="aspect-[4/3] bg-surface-muted">
-          {listing.coverImage ? (
+        <div className="aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-surface-muted">
+          {listing.coverImage && !imageBroken ? (
             <img
               alt={listing.coverImage.alt}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035]"
+              onError={() => setImageBroken(true)}
               src={listing.coverImage.url}
             />
           ) : (
@@ -56,16 +62,18 @@ export function PublicListingCard({
             </div>
           )}
         </div>
-        <div className="space-y-3 p-4">
+        <div className="space-y-3 px-2 py-4">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-lg font-bold text-primary">
+            <p className="text-xl font-semibold tracking-tight text-primary">
               {formatCurrency(listing.priceEgp, locale)}
             </p>
             <Badge tone={participationTone[listing.participation]}>
               {label}
             </Badge>
           </div>
-          <h2 className="line-clamp-1 font-bold">{listing.title}</h2>
+          <h2 className="line-clamp-1 text-lg font-semibold">
+            {listing.title}
+          </h2>
           <p className="text-sm text-ink-muted">
             {area} · {propertyTypeLabel(locale, listing.propertyType)}
           </p>

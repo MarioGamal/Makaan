@@ -47,7 +47,7 @@ export default function SavedListingsPage() {
             </p>
             <h1 className="mt-2 text-3xl font-bold">{copy.savedTitle}</h1>
           </div>
-          <Link className="text-sm font-semibold text-primary" href="/">
+          <Link className="text-sm font-semibold text-primary" href="/browse">
             {copy.browseListings}
           </Link>
         </div>
@@ -59,7 +59,11 @@ export default function SavedListingsPage() {
         ) : error ? (
           <div className="mt-8 space-y-3 text-sm text-danger" role="alert">
             <p>{copy.savedError}</p>
-            <button className="font-semibold text-primary" onClick={() => void load()} type="button">
+            <button
+              className="font-semibold text-primary"
+              onClick={() => void load()}
+              type="button"
+            >
               {copy.retry}
             </button>
           </div>
@@ -67,7 +71,10 @@ export default function SavedListingsPage() {
           <div className="mt-8 rounded-ui border border-border bg-surface-raised p-10 text-center shadow-ui">
             <h2 className="text-2xl font-bold">{copy.savedEmptyTitle}</h2>
             <p className="mt-2 text-ink-muted">{copy.savedEmptyDescription}</p>
-            <Link className="mt-6 inline-flex rounded-ui bg-primary px-4 py-3 text-sm font-semibold text-white" href="/">
+            <Link
+              className="mt-6 inline-flex rounded-ui bg-primary px-4 py-3 text-sm font-semibold text-white"
+              href="/browse"
+            >
               {copy.browseListings}
             </Link>
           </div>
