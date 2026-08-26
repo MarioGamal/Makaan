@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
-type ProviderMode = 'local' | 'production';
+type ProviderMode = 'local' | 'demo' | 'production';
 
 interface ReadinessResponse {
   status: 'ready';
@@ -56,8 +56,8 @@ export class HealthController {
   }
 
   private providerMode(): ProviderMode {
-    return this.configService.getOrThrow<string>('APP_MODE') === 'production'
-      ? 'production'
-      : 'local';
+    const mode = this.configService.getOrThrow<string>('APP_MODE');
+    if (mode === 'demo' || mode === 'production') return mode;
+    return 'local';
   }
 }

@@ -1,4 +1,5 @@
 import NextApp, { type AppContext, type AppProps } from 'next/app';
+import { Analytics } from '@vercel/analytics/next';
 import { SWRConfig } from 'swr';
 
 import { AdminAuthProvider } from '../hooks/useAdminAuth';
@@ -19,22 +20,25 @@ type MakaanAppProps = AppProps & {
 
 export default function App({ Component, pageProps }: MakaanAppProps) {
   return (
-    <SWRConfig
-      value={{
-        dedupingInterval: 2000,
-        revalidateOnFocus: false,
-      }}
-    >
-      <AdminAuthProvider>
-        <AuthProvider>
-          <LocaleProvider initialLocale={pageProps.initialLocale}>
-            <AppShell>
-              <Component {...pageProps} />
-            </AppShell>
-          </LocaleProvider>
-        </AuthProvider>
-      </AdminAuthProvider>
-    </SWRConfig>
+    <>
+      <SWRConfig
+        value={{
+          dedupingInterval: 2000,
+          revalidateOnFocus: false,
+        }}
+      >
+        <AdminAuthProvider>
+          <AuthProvider>
+            <LocaleProvider initialLocale={pageProps.initialLocale}>
+              <AppShell>
+                <Component {...pageProps} />
+              </AppShell>
+            </LocaleProvider>
+          </AuthProvider>
+        </AdminAuthProvider>
+      </SWRConfig>
+      <Analytics />
+    </>
   );
 }
 

@@ -106,6 +106,7 @@ export default function PhoneAuthPage() {
     otpForm.setValue('code', digits.join('').trimEnd(), {
       shouldValidate: false,
     });
+    otpForm.clearErrors('code');
     if (nextDigit && index < 5) otpInputs.current[index + 1]?.focus();
   };
 
@@ -199,6 +200,7 @@ export default function PhoneAuthPage() {
           </form>
         ) : (
           <form className="mt-7 space-y-5" noValidate onSubmit={submitOtp}>
+            <input type="hidden" {...otpForm.register('code')} />
             <div>
               <span className="block text-sm font-semibold">{copy.code}</span>
               <p className="mt-1 text-sm text-ink-muted">
@@ -235,6 +237,7 @@ export default function PhoneAuthPage() {
                       otpForm.setValue('code', pasted, {
                         shouldValidate: false,
                       });
+                      otpForm.clearErrors('code');
                       otpInputs.current[Math.min(pasted.length, 5)]?.focus();
                     }
                   }}

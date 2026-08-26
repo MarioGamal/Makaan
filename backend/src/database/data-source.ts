@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 
 import 'reflect-metadata';
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 
+import { databaseSslOptions } from '../config/database-tls';
 import { parseEnvironment } from '../config/environment';
 import { MAKAAN_ENTITIES } from '../models';
 
@@ -13,16 +13,15 @@ const repositoryRoot =
   basename(currentDirectory) === 'backend'
     ? dirname(currentDirectory)
     : currentDirectory;
-dotenv.config({ path: resolve(repositoryRoot, '.env') });
+dotenv.config({
+  path: resolve(repositoryRoot, process.env.MAKAAN_ENV_FILE ?? '.env'),
+});
 
 const environment = parseEnvironment(process.env);
-const ssl =
-  environment.databaseTlsMode === 'verify-full'
-    ? {
-        ca: readFileSync(environment.databaseTlsCaFile as string, 'utf8'),
-        rejectUnauthorized: true as const,
-      }
-    : false;
+const ssl = databaseSslOptions(
+  environment.databaseTlsMode,
+  environment.databaseTlsCaFile,
+);
 
 export default new DataSource({
   type: 'postgres',

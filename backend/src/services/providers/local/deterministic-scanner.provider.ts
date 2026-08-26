@@ -9,7 +9,7 @@ const EICAR_SIGNATURE =
 const SCANNER_ERROR_MARKER = 'MAKAAN_SCANNER_ERROR_TEST_MARKER';
 
 /**
- * A deterministic local/test scanner. It is intentionally not a no-op: tests can
+ * A deterministic local/test/demo scanner. It is intentionally not a no-op: tests can
  * prove both malicious and scanner-failure quarantine paths without a paid service.
  */
 export class DeterministicScannerProvider implements MediaScannerProvider {

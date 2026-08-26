@@ -1,11 +1,11 @@
-export const APP_MODES = ['local', 'test', 'production'] as const;
+export const APP_MODES = ['local', 'test', 'demo', 'production'] as const;
 export type AppMode = (typeof APP_MODES)[number];
 
 export type OtpProviderMode = 'local_fixed' | 'twilio';
-export type MediaProviderMode = 'local' | 's3';
+export type MediaProviderMode = 'local' | 'cloudinary' | 's3';
 export type MalwareScannerProviderMode = 'deterministic' | 'clamav';
 export type MapProviderMode = 'accessible_local' | 'mapbox';
-export type DatabaseTlsMode = 'disable' | 'verify-full';
+export type DatabaseTlsMode = 'disable' | 'require' | 'verify-full';
 
 export interface EnvironmentConfig {
   appMode: AppMode;
@@ -78,6 +78,9 @@ const LOCAL_ONLY_NAMES = [
   'LOCAL_ADMIN_EMAIL',
   'LOCAL_ADMIN_PASSWORD',
   'LOCAL_ADMIN_TOTP_SECRET',
+  'DEMO_ADMIN_EMAIL',
+  'DEMO_ADMIN_PASSWORD',
+  'DEMO_ADMIN_TOTP_SECRET',
 ] as const;
 
 const ABUSE_LIMIT_NAMES = [
@@ -230,6 +233,75 @@ function parseAllowedOrigins(
   return [...new Set(origins)];
 }
 
+function validateDemoProviders(
+  environment: NodeJS.ProcessEnv,
+  issues: ValidationIssue[],
+): void {
+  const requiredProviderValues = [
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET',
+    'MAPBOX_TOKEN',
+    'NEXT_PUBLIC_API_URL',
+    'NEXT_PUBLIC_MAPBOX_TOKEN',
+    'DEMO_ADMIN_EMAIL',
+    'DEMO_ADMIN_PASSWORD',
+    'DEMO_ADMIN_TOTP_SECRET',
+  ];
+
+  for (const name of requiredProviderValues) {
+    const value = required(environment, name, issues);
+    if (isPlaceholder(value)) {
+      issues.push({ name, reason: 'must not use a placeholder' });
+    }
+  }
+  if (valueOf(environment, 'DEMO_ADMIN_PASSWORD').length < 12) {
+    issues.push({
+      name: 'DEMO_ADMIN_PASSWORD',
+      reason: 'must contain at least 12 characters',
+    });
+  }
+  if (!/^[A-Z2-7]+=*$/i.test(valueOf(environment, 'DEMO_ADMIN_TOTP_SECRET'))) {
+    issues.push({
+      name: 'DEMO_ADMIN_TOTP_SECRET',
+      reason: 'must be a base32 authenticator secret',
+    });
+  }
+  if (valueOf(environment, 'NEXT_PUBLIC_MAP_PROVIDER') !== 'mapbox') {
+    issues.push({
+      name: 'NEXT_PUBLIC_MAP_PROVIDER',
+      reason: 'must be mapbox in demo mode',
+    });
+  }
+  const apiUrl = urlValue(environment, 'NEXT_PUBLIC_API_URL', issues, [
+    'https:',
+  ]);
+  if (!apiUrl.pathname.startsWith('/api/v1')) {
+    issues.push({
+      name: 'NEXT_PUBLIC_API_URL',
+      reason: 'must use the /api/v1 proxy path',
+    });
+  }
+  const allowedOrigins = valueOf(environment, 'ALLOWED_ORIGINS')
+    .split(',')
+    .map((value) => value.trim());
+  if (!allowedOrigins.includes(apiUrl.origin)) {
+    issues.push({
+      name: 'NEXT_PUBLIC_API_URL',
+      reason: 'must use an allowed frontend origin',
+    });
+  }
+  if (
+    valueOf(environment, 'MAPBOX_TOKEN') !==
+    valueOf(environment, 'NEXT_PUBLIC_MAPBOX_TOKEN')
+  ) {
+    issues.push({
+      name: 'NEXT_PUBLIC_MAPBOX_TOKEN',
+      reason: 'must match the configured demo Mapbox token',
+    });
+  }
+}
+
 function parseTrustedProxyCidrs(
   environment: NodeJS.ProcessEnv,
   issues: ValidationIssue[],
@@ -321,13 +393,14 @@ export function parseEnvironment(
   const issues: ValidationIssue[] = [];
   const appMode = oneOf(environment, 'APP_MODE', APP_MODES, issues);
   const production = appMode === 'production';
+  const hosted = production || appMode === 'demo';
   const nodeEnv = required(environment, 'NODE_ENV', issues);
   const port = positiveInteger(environment, 'PORT', issues, 65_535);
   const publicAppUrl = urlValue(environment, 'PUBLIC_APP_URL', issues, [
     'http:',
     'https:',
   ]);
-  const allowedOrigins = parseAllowedOrigins(environment, issues, production);
+  const allowedOrigins = parseAllowedOrigins(environment, issues, hosted);
   const trustedProxyCidrs = parseTrustedProxyCidrs(
     environment,
     issues,
@@ -371,7 +444,7 @@ export function parseEnvironment(
   const databaseTlsMode = oneOf(
     environment,
     'DATABASE_TLS_MODE',
-    ['disable', 'verify-full'] as const,
+    ['disable', 'require', 'verify-full'] as const,
     issues,
   );
   const databaseTlsCaFile =
@@ -407,7 +480,7 @@ export function parseEnvironment(
   const mediaProvider = oneOf(
     environment,
     'MEDIA_PROVIDER',
-    ['local', 's3'] as const,
+    ['local', 'cloudinary', 's3'] as const,
     issues,
   );
   const malwareScannerProvider = oneOf(
@@ -458,7 +531,7 @@ export function parseEnvironment(
     if (value.length < 32) {
       issues.push({ name, reason: 'must contain at least 32 characters' });
     }
-    if (production && isPlaceholder(value)) {
+    if (hosted && isPlaceholder(value)) {
       issues.push({
         name,
         reason: 'must not use a placeholder or local fixture',
@@ -466,11 +539,11 @@ export function parseEnvironment(
     }
   }
 
-  if (production) {
+  if (hosted) {
     if (nodeEnv !== 'production') {
       issues.push({
         name: 'NODE_ENV',
-        reason: 'must be production when APP_MODE is production',
+        reason: 'must be production when APP_MODE is hosted',
       });
     }
     if (
@@ -494,13 +567,19 @@ export function parseEnvironment(
         reason: 'must be empty for host-only cookies',
       });
     }
-    if (databaseTlsMode !== 'verify-full') {
+    if (
+      (production && databaseTlsMode !== 'verify-full') ||
+      (appMode === 'demo' && databaseTlsMode === 'disable')
+    ) {
       issues.push({
         name: 'DATABASE_TLS_MODE',
-        reason: 'must be verify-full in production',
+        reason:
+          production
+            ? 'must be verify-full in production'
+            : 'must enable TLS in demo mode',
       });
     }
-    if (!databaseTlsCaFile) {
+    if (databaseTlsMode === 'verify-full' && !databaseTlsCaFile) {
       issues.push({
         name: 'DATABASE_TLS_CA_FILE',
         reason: 'is required in production',
@@ -512,18 +591,26 @@ export function parseEnvironment(
         reason: 'must use rediss transport in production',
       });
     }
-    if (
-      otpProvider !== 'twilio' ||
-      mediaProvider !== 's3' ||
-      malwareScannerProvider !== 'clamav' ||
-      mapProvider !== 'mapbox'
-    ) {
+    const invalidProviderSelection = production
+      ? otpProvider !== 'twilio' ||
+        mediaProvider !== 's3' ||
+        malwareScannerProvider !== 'clamav' ||
+        mapProvider !== 'mapbox'
+      : otpProvider !== 'local_fixed' ||
+        mediaProvider !== 'cloudinary' ||
+        malwareScannerProvider !== 'deterministic' ||
+        mapProvider !== 'mapbox';
+    if (invalidProviderSelection) {
       issues.push({
         name: 'APP_MODE',
-        reason: 'must select production providers',
+        reason: `must select ${production ? 'production' : 'demo'} providers`,
       });
     }
-    validateProductionProviders(environment, issues);
+    if (production) {
+      validateProductionProviders(environment, issues);
+    } else {
+      validateDemoProviders(environment, issues);
+    }
   } else {
     if (
       otpProvider !== 'local_fixed' ||

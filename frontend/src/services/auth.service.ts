@@ -45,7 +45,9 @@ export async function sellerRequest(
   csrfToken?: string,
 ) {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has('Content-Type'))
+  const isFormData =
+    typeof FormData !== 'undefined' && init.body instanceof FormData;
+  if (init.body && !isFormData && !headers.has('Content-Type'))
     headers.set('Content-Type', 'application/json');
   if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(init.method ?? 'GET'))
     headers.set('X-CSRF-Token', csrfToken);

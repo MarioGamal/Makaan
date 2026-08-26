@@ -338,6 +338,8 @@ export class SessionService {
   }
 
   private isProduction(): boolean {
-    return this.configService.get<string>('APP_MODE') === 'production';
+    return ['demo', 'production'].includes(
+      this.configService.get<string>('APP_MODE') ?? '',
+    );
   }
 }

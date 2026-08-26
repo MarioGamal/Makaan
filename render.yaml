@@ -1,0 +1,87 @@
+services:
+  - type: web
+    name: makaan-demo-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build:shared && npm run build:backend
+    startCommand: npm --workspace backend run start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.4
+      - key: APP_MODE
+        value: demo
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: TRUSTED_PROXY_CIDRS
+        value: ''
+      - key: COOKIE_SECURE
+        value: 'true'
+      - key: COOKIE_SAME_SITE
+        value: lax
+      - key: COOKIE_DOMAIN
+        value: ''
+      - key: SELLER_SESSION_IDLE_MINUTES
+        value: '480'
+      - key: SELLER_SESSION_ABSOLUTE_HOURS
+        value: '720'
+      - key: ADMIN_SESSION_IDLE_MINUTES
+        value: '30'
+      - key: ADMIN_SESSION_ABSOLUTE_HOURS
+        value: '8'
+      - key: CONTACT_INTENT_TTL_SECONDS
+        value: '300'
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_TLS_MODE
+        value: require
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_TLS
+        value: 'true'
+      - key: SESSION_TOKEN_PEPPER
+        sync: false
+      - key: CSRF_TOKEN_PEPPER
+        sync: false
+      - key: PHONE_LOOKUP_PEPPER
+        sync: false
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: OTP_PROVIDER
+        value: local_fixed
+      - key: MEDIA_PROVIDER
+        value: cloudinary
+      - key: MALWARE_SCANNER_PROVIDER
+        value: deterministic
+      - key: MAP_PROVIDER
+        value: mapbox
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: MAPBOX_TOKEN
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_MAP_PROVIDER
+        value: mapbox
+      - key: NEXT_PUBLIC_MAPBOX_TOKEN
+        sync: false
+      - key: DEMO_ADMIN_EMAIL
+        sync: false
+      - key: DEMO_ADMIN_PASSWORD
+        sync: false
+      - key: DEMO_ADMIN_TOTP_SECRET
+        sync: false
+      - key: EVIDENCE_RETENTION_DAYS
+        value: '30'
+      - key: LOG_RETENTION_DAYS
+        value: '30'
+      - key: LOG_LEVEL
+        value: info

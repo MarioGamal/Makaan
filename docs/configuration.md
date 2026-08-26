@@ -7,10 +7,15 @@ providers and security posture:
 | ------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `local`      | Developer machine    | Fixed non-logging OTP, local media, deterministic scanner, accessible local map substitute                                          |
 | `test`       | Automated tests      | Same non-production adapters with isolated test paths and deterministic fixtures                                                    |
+| `demo`       | Hosted product demo  | Fixed non-logging OTP, Cloudinary media, deterministic scanner, Mapbox, hosted TLS, and secure cookies                              |
 | `production` | Deployed application | Configured SMS, private object storage, real malware scanner, encryption, map, TLS, cookies, exact origins, and trusted proxy CIDRs |
 
 `NODE_ENV` does not select providers. The application must validate the whole environment before
 Nest starts and reject an invalid configuration; it must not silently select a substitute.
+
+The `demo` mode is intentionally not a production shortcut. It exists for the
+zero-cost functional deployment described in `docs/demo-deployment.md`; its fixed
+OTP and deterministic scanner must never be used for real customer traffic.
 
 ## Local setup inventory
 

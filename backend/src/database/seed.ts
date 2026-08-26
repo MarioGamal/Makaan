@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 
 import { ListingStatus } from '@makaan/shared/constants/enums';
 import bcrypt from 'bcryptjs';
+import { v2 as cloudinary } from 'cloudinary';
 import { DataSource } from 'typeorm';
 
 import { MAKAAN_ENTITIES } from '../models';
@@ -38,7 +39,8 @@ function protectedValue(value: string, secret: string): string {
   return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ciphertext.toString('base64url')}`;
 }
 
-function requireLocalSeedEnvironment(databaseUrl?: string): {
+type DemoSeedEnvironment = {
+  mode: 'local' | 'test' | 'demo';
   databaseUrl: string;
   phoneLookupPepper: string;
   fieldEncryptionKey: string;
@@ -47,47 +49,122 @@ function requireLocalSeedEnvironment(databaseUrl?: string): {
   adminTotpSecret: string;
   localMediaRoot: string;
   publicMediaOrigin: string;
-} {
+  databaseSsl: false | { rejectUnauthorized: true };
+};
+
+function requireDemoSeedEnvironment(databaseUrl?: string): DemoSeedEnvironment {
   const mode = process.env.APP_MODE;
-  if (mode !== 'local' && mode !== 'test') {
-    throw new Error('Demo seed is available only in local or test mode.');
+  if (mode !== 'local' && mode !== 'test' && mode !== 'demo') {
+    throw new Error('Demo seed is available only in local, test, or demo mode.');
   }
   const resolvedUrl = databaseUrl ?? process.env.DATABASE_URL;
   if (!resolvedUrl) {
     throw new Error('Demo seed requires an explicit DATABASE_URL.');
   }
-  const target = assertLocalDatabaseTarget(resolvedUrl, mode);
+  const target =
+    mode === 'demo'
+      ? new URL(resolvedUrl)
+      : assertLocalDatabaseTarget(resolvedUrl, mode);
+  if (
+    mode === 'demo' &&
+    target.protocol !== 'postgres:' &&
+    target.protocol !== 'postgresql:'
+  ) {
+    throw new Error('Hosted demo seed requires a PostgreSQL URL.');
+  }
+  if (
+    mode === 'demo' &&
+    process.env.MAKAAN_ALLOW_HOSTED_DEMO_SEED !== '1'
+  ) {
+    throw new Error(
+      'Set MAKAAN_ALLOW_HOSTED_DEMO_SEED=1 to confirm the hosted demo seed target.',
+    );
+  }
+  const prefix = mode === 'demo' ? 'DEMO' : 'LOCAL';
+  const adminEmail = process.env[`${prefix}_ADMIN_EMAIL`];
+  const adminPassword = process.env[`${prefix}_ADMIN_PASSWORD`];
+  const adminTotpSecret = process.env[`${prefix}_ADMIN_TOTP_SECRET`];
+  if (mode === 'demo' && (!adminEmail || !adminPassword || !adminTotpSecret)) {
+    throw new Error('Hosted demo administrator credentials are incomplete.');
+  }
+  if (
+    mode === 'demo' &&
+    (!process.env.CLOUDINARY_CLOUD_NAME ||
+      !process.env.CLOUDINARY_API_KEY ||
+      !process.env.CLOUDINARY_API_SECRET)
+  ) {
+    throw new Error('Hosted demo Cloudinary configuration is incomplete.');
+  }
   return {
+    mode,
     databaseUrl: target.toString(),
     phoneLookupPepper:
       process.env.PHONE_LOOKUP_PEPPER ?? 'makaan-test-phone-pepper',
     fieldEncryptionKey:
       process.env.FIELD_ENCRYPTION_KEY ?? 'makaan-test-field-encryption-key',
-    adminEmail: process.env.LOCAL_ADMIN_EMAIL ?? 'admin@makaan.test',
-    adminPassword:
-      process.env.LOCAL_ADMIN_PASSWORD ?? 'local-admin-password-only',
-    adminTotpSecret: process.env.LOCAL_ADMIN_TOTP_SECRET ?? 'JBSWY3DPEHPK3PXP',
+    adminEmail: adminEmail ?? 'admin@makaan.test',
+    adminPassword: adminPassword ?? 'local-admin-password-only',
+    adminTotpSecret: adminTotpSecret ?? 'JBSWY3DPEHPK3PXP',
     localMediaRoot: resolveRepositoryPath(
       process.env.LOCAL_MEDIA_ROOT ?? 'infrastructure/local-media',
     ),
     publicMediaOrigin: `http://localhost:${process.env.PORT ?? '4000'}`,
+    databaseSsl: mode === 'demo' ? { rejectUnauthorized: true } : false,
   };
 }
 
 async function installDemoMedia(
-  localMediaRoot: string,
-): Promise<Map<string, number>> {
+  environment: DemoSeedEnvironment,
+): Promise<Map<string, { byteSize: number; url: string }>> {
   const sourceDirectory = resolve(__dirname, 'fixtures', 'media');
-  const targetDirectory = resolve(localMediaRoot, 'listing-media', 'demo');
   const assetFilenames = [
     ...new Set(mediaMetadata.map(({ assetFilename }) => assetFilename)),
   ];
+  if (environment.mode === 'demo') {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+    const uploaded = await Promise.all(
+      assetFilenames.map(async (assetFilename) => {
+        const source = resolve(sourceDirectory, assetFilename);
+        const result = await cloudinary.uploader.upload(source, {
+          folder: 'makaan/demo',
+          public_id: assetFilename.replace(/\.[^.]+$/, ''),
+          resource_type: 'image',
+          overwrite: true,
+        });
+        return [
+          assetFilename,
+          { byteSize: (await stat(source)).size, url: result.secure_url },
+        ] as const;
+      }),
+    );
+    return new Map(uploaded);
+  }
+
+  const targetDirectory = resolve(
+    environment.localMediaRoot,
+    'listing-media',
+    'demo',
+  );
   await mkdir(targetDirectory, { recursive: true });
   const installed = await Promise.all(
     assetFilenames.map(async (assetFilename) => {
       const target = resolve(targetDirectory, assetFilename);
       await copyFile(resolve(sourceDirectory, assetFilename), target);
-      return [assetFilename, (await stat(target)).size] as const;
+      return [
+        assetFilename,
+        {
+          byteSize: (await stat(target)).size,
+          url: new URL(
+            `/media/listings/demo/${assetFilename}`,
+            environment.publicMediaOrigin,
+          ).toString(),
+        },
+      ] as const;
     }),
   );
   return new Map(installed);
@@ -95,8 +172,8 @@ async function installDemoMedia(
 
 /** Seeds deterministic local demonstration records with protected local-only sign-in material. */
 export async function seedDatabase(databaseUrl?: string): Promise<void> {
-  const environment = requireLocalSeedEnvironment(databaseUrl);
-  const mediaByteSizes = await installDemoMedia(environment.localMediaRoot);
+  const environment = requireDemoSeedEnvironment(databaseUrl);
+  const installedMedia = await installDemoMedia(environment);
   const adminPasswordHash = await bcrypt.hash(environment.adminPassword, 12);
   const adminSecondFactorCiphertext = protectedValue(
     environment.adminTotpSecret,
@@ -107,7 +184,7 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
     url: environment.databaseUrl,
     entities: [...MAKAAN_ENTITIES],
     synchronize: false,
-    ssl: false,
+    ssl: environment.databaseSsl,
   });
   await source.initialize();
 
@@ -331,10 +408,9 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
       }
 
       for (const media of mediaMetadata) {
-        const mediaUrl = new URL(
-          media.publicPath,
-          environment.publicMediaOrigin,
-        ).toString();
+        const installed = installedMedia.get(media.assetFilename);
+        if (!installed) throw new Error('Fixture media upload is missing.');
+        const mediaUrl = installed.url;
         await manager.query(
           `INSERT INTO photos (id, listing_id, cloudinary_url, display_order, original_filename, width, height, created_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -381,7 +457,7 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
               environment.fieldEncryptionKey,
             ),
             mediaUrl,
-            mediaByteSizes.get(media.assetFilename) ?? 0,
+            installed.byteSize,
             media.width,
             media.height,
             createHash('sha256')

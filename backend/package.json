@@ -18,6 +18,9 @@
     "migration:validate": "bash ../scripts/validate-migrations.sh",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/database/data-source.ts",
     "seed": "DOTENV_CONFIG_PATH=../.env ts-node -r dotenv/config -r tsconfig-paths/register src/database/seed.ts",
+    "seed:demo-hosted": "DOTENV_CONFIG_PATH=../.env.demo MAKAAN_ALLOW_HOSTED_DEMO_SEED=1 ts-node -r dotenv/config -r tsconfig-paths/register src/database/seed.ts",
+    "demo:totp": "DOTENV_CONFIG_PATH=../.env.demo TS_NODE_FILES=true ts-node -r dotenv/config -r tsconfig-paths/register src/scripts/generate-demo-totp.ts",
+    "demo:config:check": "DOTENV_CONFIG_PATH=../.env.demo ts-node -r dotenv/config -r tsconfig-paths/register src/scripts/check-demo-config.ts",
     "reset:demo": "DOTENV_CONFIG_PATH=../.env ts-node -r dotenv/config -r tsconfig-paths/register src/database/reset.ts demo",
     "reset:empty": "DOTENV_CONFIG_PATH=../.env ts-node -r dotenv/config -r tsconfig-paths/register src/database/reset.ts empty"
   },

@@ -45,7 +45,7 @@ const initial: FormState = {
   descriptionAr: '',
   titleEn: '',
   descriptionEn: '',
-  location: { lat: 30.0444, lng: 31.2357 },
+  location: { lat: 29.96, lng: 31.265 },
   publicLocationMode: 'approximate',
   sellerDeclaration: null,
 };
@@ -597,7 +597,7 @@ export function SellerListingEditor({
           {step < labels.length - 1 ? (
             <Button onClick={advanceStep}>{copy.next}</Button>
           ) : (
-            <Button loading={busy} onClick={() => void saveAndSubmit}>
+            <Button loading={busy} onClick={() => void saveAndSubmit()}>
               {copy.submit}
             </Button>
           )}

@@ -22,7 +22,9 @@ import { ProvidersModule } from './services/providers';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../.env'],
+      envFilePath: process.env.MAKAAN_ENV_FILE
+        ? [process.env.MAKAAN_ENV_FILE, `../${process.env.MAKAAN_ENV_FILE}`]
+        : ['.env', '../.env'],
       cache: true,
       validate: validateEnvironment,
     }),

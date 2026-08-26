@@ -7,7 +7,7 @@ import {
 } from '../otp.provider';
 
 /**
- * The local/test adapter deliberately has no delivery side effect and no log output.
+ * The local/test/demo adapter deliberately has no delivery side effect and no log output.
  * It exists only behind the explicit APP_MODE gate configured by the application.
  */
 export class LocalOtpProvider implements OtpProvider {

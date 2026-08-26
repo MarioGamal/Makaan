@@ -88,18 +88,19 @@ export class AdminAuthService {
 
   private async createLocalAdministrator(email: string): Promise<User | null> {
     const mode = this.configService.getOrThrow<string>('APP_MODE');
+    const prefix = mode === 'demo' ? 'DEMO' : 'LOCAL';
     const configuredEmail = this.configService
-      .get<string>('LOCAL_ADMIN_EMAIL')
+      .get<string>(`${prefix}_ADMIN_EMAIL`)
       ?.trim()
       .toLowerCase();
     const configuredPassword = this.configService.get<string>(
-      'LOCAL_ADMIN_PASSWORD',
+      `${prefix}_ADMIN_PASSWORD`,
     );
     const configuredSecret = this.configService.get<string>(
-      'LOCAL_ADMIN_TOTP_SECRET',
+      `${prefix}_ADMIN_TOTP_SECRET`,
     );
     if (
-      (mode !== 'local' && mode !== 'test') ||
+      (mode !== 'local' && mode !== 'test' && mode !== 'demo') ||
       !configuredEmail ||
       email !== configuredEmail ||
       !configuredPassword ||

@@ -1,20 +1,17 @@
-import { readFileSync } from 'node:fs';
-
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { databaseSslOptions } from '../config/database-tls';
 import { MAKAAN_ENTITIES } from '../models';
 
-function databaseSsl(
-  configService: ConfigService,
-): false | { ca: string; rejectUnauthorized: true } {
-  if (configService.getOrThrow<string>('DATABASE_TLS_MODE') !== 'verify-full') {
-    return false;
-  }
-
-  const caFile = configService.getOrThrow<string>('DATABASE_TLS_CA_FILE');
-  return { ca: readFileSync(caFile, 'utf8'), rejectUnauthorized: true };
+function databaseSsl(configService: ConfigService) {
+  return databaseSslOptions(
+    configService.getOrThrow<'disable' | 'require' | 'verify-full'>(
+      'DATABASE_TLS_MODE',
+    ),
+    configService.get<string>('DATABASE_TLS_CA_FILE'),
+  );
 }
 
 @Global()

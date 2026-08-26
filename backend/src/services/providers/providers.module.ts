@@ -2,7 +2,10 @@ import { basename, dirname, isAbsolute, resolve } from 'node:path';
 
 import { Global, Module, Provider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { v2 as cloudinary } from 'cloudinary';
 
+import { CloudinaryMediaProvider } from './hosted/cloudinary-media.provider';
+import { MapboxMetadataProvider } from './hosted/mapbox-metadata.provider';
 import { DeterministicScannerProvider } from './local/deterministic-scanner.provider';
 import { LocalMapMetadataProvider } from './local/local-map-metadata.provider';
 import { LocalMediaProvider } from './local/local-media.provider';
@@ -32,9 +35,10 @@ export function resolveRepositoryPath(path: string): string {
   return resolve(repositoryRoot, path);
 }
 
-function localOnlyProvider<T>(
+function selectedProvider<T>(
   category: string,
-  expectedMode: string,
+  allowedAppModes: string[],
+  expectedMode: string | undefined,
   selectedModeName: string,
   factory: ProviderFactory<T>,
 ): ProviderFactory<T> {
@@ -43,8 +47,8 @@ function localOnlyProvider<T>(
     const selectedMode = configService.getOrThrow<string>(selectedModeName);
 
     if (
-      (appMode !== 'local' && appMode !== 'test') ||
-      selectedMode !== expectedMode
+      !allowedAppModes.includes(appMode) ||
+      (expectedMode !== undefined && selectedMode !== expectedMode)
     ) {
       throw new Error(
         `${category} provider is not registered for the validated application mode.`,
@@ -59,8 +63,9 @@ const providerBindings: Provider[] = [
   {
     provide: OTP_PROVIDER,
     inject: [ConfigService],
-    useFactory: localOnlyProvider<OtpProvider>(
+    useFactory: selectedProvider<OtpProvider>(
       'OTP',
+      ['local', 'test', 'demo'],
       'local_fixed',
       'OTP_PROVIDER',
       () => {
@@ -71,11 +76,21 @@ const providerBindings: Provider[] = [
   {
     provide: MEDIA_PROVIDER,
     inject: [ConfigService],
-    useFactory: localOnlyProvider<MediaProvider>(
+    useFactory: selectedProvider<MediaProvider>(
       'Media',
-      'local',
-      'MEDIA_PROVIDER',
+      ['local', 'test', 'demo'],
+      undefined,
+      'APP_MODE',
       (config) => {
+        if (config.getOrThrow<string>('APP_MODE') === 'demo') {
+          cloudinary.config({
+            cloud_name: config.getOrThrow<string>('CLOUDINARY_CLOUD_NAME'),
+            api_key: config.getOrThrow<string>('CLOUDINARY_API_KEY'),
+            api_secret: config.getOrThrow<string>('CLOUDINARY_API_SECRET'),
+            secure: true,
+          });
+          return new CloudinaryMediaProvider(cloudinary);
+        }
         return new LocalMediaProvider(
           resolveRepositoryPath(config.getOrThrow<string>('LOCAL_MEDIA_ROOT')),
         );
@@ -85,8 +100,9 @@ const providerBindings: Provider[] = [
   {
     provide: MEDIA_SCANNER_PROVIDER,
     inject: [ConfigService],
-    useFactory: localOnlyProvider<MediaScannerProvider>(
+    useFactory: selectedProvider<MediaScannerProvider>(
       'Malware scanner',
+      ['local', 'test', 'demo'],
       'deterministic',
       'MALWARE_SCANNER_PROVIDER',
       () => new DeterministicScannerProvider(),
@@ -95,17 +111,21 @@ const providerBindings: Provider[] = [
   {
     provide: MAP_METADATA_PROVIDER,
     inject: [ConfigService],
-    useFactory: localOnlyProvider<MapMetadataProvider>(
+    useFactory: selectedProvider<MapMetadataProvider>(
       'Map metadata',
-      'accessible_local',
-      'MAP_PROVIDER',
-      () => new LocalMapMetadataProvider(),
+      ['local', 'test', 'demo'],
+      undefined,
+      'APP_MODE',
+      (config) =>
+        config.getOrThrow<string>('APP_MODE') === 'demo'
+          ? new MapboxMetadataProvider()
+          : new LocalMapMetadataProvider(),
     ),
   },
 ];
 
 /**
- * Local/test adapters are available only after validated APP_MODE selection.
+ * Local/test/demo adapters are available only after validated APP_MODE selection.
  * Production remains fail-closed until each real adapter is registered by its owning feature task.
  */
 @Global()
