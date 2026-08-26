@@ -42,7 +42,9 @@ Create a Render Blueprint from `render.yaml`. Enter every value marked
 variables. Do not include URL paths in `PUBLIC_APP_URL` or `ALLOWED_ORIGINS`.
 
 Render builds from the repository root because the backend depends on the shared
-workspace. The free service health check uses `/api/v1/health`; database readiness
+workspace. Its build explicitly installs development dependencies because the Nest
+CLI and TypeScript compiler are build-time tools even when `NODE_ENV=production`.
+The free service health check uses `/api/v1/health`; database readiness
 is available separately at `/api/v1/health/ready`.
 
 ## 4. Connect the same-origin API proxy
