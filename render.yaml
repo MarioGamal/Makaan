@@ -3,6 +3,8 @@ services:
     name: makaan-demo-api
     runtime: node
     plan: free
+    region: frankfurt
+    branch: codex/marketplace-redesign
     buildCommand: npm ci && npm run build:shared && npm run build:backend
     startCommand: npm --workspace backend run start
     healthCheckPath: /api/v1/health
