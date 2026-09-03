@@ -12,6 +12,7 @@ tmp/
 .env.*
 !.env.example
 !.env.demo.example
+!frontend/.env.local.example
 .DS_Store
 Thumbs.db
 *.tmp
