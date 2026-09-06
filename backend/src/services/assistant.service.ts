@@ -89,6 +89,7 @@ export class AssistantService {
       shownCount: listings.length,
       relaxations,
       continuedFromContext,
+      unsupported: interpretation.unsupported,
       priceRange:
         prices.length > 0
           ? { min: Math.min(...prices), max: Math.max(...prices) }
@@ -110,6 +111,7 @@ export class AssistantService {
       totalMatches,
       filters: appliedFilters,
       relaxations,
+      unsupported: interpretation.unsupported,
       browseQuery: this.browseQuery(appliedFilters),
       suggestions: composition.suggestions,
       topics: interpretation.topics,
@@ -161,6 +163,7 @@ export class AssistantService {
       'priceMax',
       'sizeMin',
       'bedroomsMin',
+      'bedroomsMax',
       'participation',
     ] as const;
     return facets.some(
@@ -245,6 +248,18 @@ export class AssistantService {
       candidates.push({ filters: base, relaxations: notes });
     }
 
+    // An exact count is loosened before the floor is: someone who asked for two
+    // bedrooms is better served by a three bedroom home than by nothing at all.
+    if (base.bedroomsMax !== undefined) {
+      notes = [
+        ...notes,
+        { kind: 'bedrooms_ceiling_dropped', from: base.bedroomsMax },
+      ];
+      base = { ...base };
+      delete base.bedroomsMax;
+      candidates.push({ filters: base, relaxations: notes });
+    }
+
     if (base.bedroomsMin !== undefined && base.bedroomsMin > 1) {
       const from = base.bedroomsMin;
       const to = from - 1;
@@ -322,6 +337,9 @@ export class AssistantService {
     if (filters.bedroomsMin !== undefined) {
       query.bedroomsMin = filters.bedroomsMin;
     }
+    if (filters.bedroomsMax !== undefined) {
+      query.bedroomsMax = filters.bedroomsMax;
+    }
     if (filters.participation?.length) {
       query.participation = [...filters.participation];
     }
@@ -345,6 +363,9 @@ export class AssistantService {
     }
     if (filters.bedroomsMin !== undefined) {
       params.set('bedroomsMin', String(filters.bedroomsMin));
+    }
+    if (filters.bedroomsMax !== undefined) {
+      params.set('bedroomsMax', String(filters.bedroomsMax));
     }
     // The browse page carries a single participation value in its query contract.
     if (filters.participation?.length === 1) {

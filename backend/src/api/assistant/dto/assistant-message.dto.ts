@@ -79,6 +79,13 @@ export class AssistantContextDto {
   bedroomsMin?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(20)
+  bedroomsMax?: number;
+
+  @IsOptional()
   @IsArray()
   @IsIn(['verified_owner', 'owner_not_verified', 'declared_agent'], {
     each: true,

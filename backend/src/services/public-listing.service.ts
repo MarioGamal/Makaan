@@ -267,6 +267,10 @@ export class PublicListingService {
       builder.andWhere('listing.bedrooms >= :bedroomsMin', {
         bedroomsMin: query.bedroomsMin,
       });
+    if (query.bedroomsMax !== undefined)
+      builder.andWhere('listing.bedrooms <= :bedroomsMax', {
+        bedroomsMax: query.bedroomsMax,
+      });
     if (query.participation?.length) {
       builder.andWhere(
         `CASE

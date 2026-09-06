@@ -22,10 +22,30 @@ export interface AssistantFilters {
   sizeMin?: number;
   sizeMax?: number;
   bedroomsMin?: number;
-  bathroomsMin?: number;
+  bedroomsMax?: number;
   participation?: ParticipationLabel[];
   sort?: PublicSort;
 }
+
+/**
+ * A constraint the visitor asked for that public search cannot express.
+ *
+ * It is reported rather than dropped: answering as though a finishing level or a
+ * garage had been filtered on would describe a search that never happened.
+ */
+export type UnsupportedConstraint =
+  | 'finishing'
+  | 'floor'
+  | 'bathrooms'
+  | 'furnished'
+  | 'parking'
+  | 'elevator'
+  | 'outdoor_space'
+  | 'compound'
+  | 'nearby'
+  | 'payment_terms'
+  | 'aggregate'
+  | 'area_comparison';
 
 /** A constraint the assistant loosened, and the value it used instead. */
 export type AssistantRelaxation =
@@ -33,6 +53,7 @@ export type AssistantRelaxation =
   | { kind: 'price_ceiling_dropped'; from: number }
   | { kind: 'bedrooms_lowered'; from: number; to: number }
   | { kind: 'bedrooms_dropped'; from: number }
+  | { kind: 'bedrooms_ceiling_dropped'; from: number }
   | { kind: 'property_type_dropped'; from: string }
   | { kind: 'participation_dropped' }
   | { kind: 'size_dropped' }
@@ -63,6 +84,8 @@ export interface AssistantMessageResponse {
   totalMatches: number;
   filters: AssistantFilters;
   relaxations: AssistantRelaxation[];
+  /** Constraints stated in the question that public search cannot apply. */
+  unsupported: UnsupportedConstraint[];
   /** Deep link into the real marketplace search with the same filters applied. */
   browseQuery: string;
   /** Localized quick replies the interface may offer as buttons. */

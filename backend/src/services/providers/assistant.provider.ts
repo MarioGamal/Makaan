@@ -2,6 +2,7 @@ import type {
   AssistantFilters,
   AssistantIntent,
   AssistantRelaxation,
+  UnsupportedConstraint,
 } from '@makaan/shared/types/assistant';
 import type { Locale } from '@makaan/shared/types/marketplace';
 
@@ -28,6 +29,8 @@ export interface AssistantInterpretation {
   topics: string[];
   /** True when the visitor asked to start a new search rather than refine one. */
   resetContext: boolean;
+  /** Constraints the question stated that public search cannot express. */
+  unsupported: UnsupportedConstraint[];
 }
 
 export interface AssistantCompositionInput {
@@ -40,6 +43,8 @@ export interface AssistantCompositionInput {
   relaxations: AssistantRelaxation[];
   /** True when filters carried over from an earlier turn shaped this answer. */
   continuedFromContext: boolean;
+  /** Constraints that must be disclosed as not applied. */
+  unsupported: UnsupportedConstraint[];
   priceRange?: { min: number; max: number };
   areaNames: ReadonlyArray<{ nameAr: string; nameEn: string }>;
 }

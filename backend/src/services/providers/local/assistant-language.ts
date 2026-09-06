@@ -1,4 +1,7 @@
-import type { AssistantFilters } from '@makaan/shared/types/assistant';
+import type {
+  AssistantFilters,
+  UnsupportedConstraint,
+} from '@makaan/shared/types/assistant';
 import type { ParticipationLabel } from '@makaan/shared/types/marketplace';
 
 import type { AssistantAreaOption } from '../assistant.provider';
@@ -24,9 +27,56 @@ const LETTER_FOLDING: Record<string, string> = {
   ئ: 'ي', // ئ -> ي
 };
 
+/**
+ * Egyptian Arabic typed in Latin letters and digits, which is how a large share of
+ * visitors write. Only forms that are unambiguously transliteration are mapped —
+ * real English words are left alone, because the English keyword lists already
+ * handle them and rewriting them could change a correct parse.
+ */
+const FRANCO_TOKENS: Array<[RegExp, string]> = [
+  [/\b(?:sha2+a|sha2+ah|sha22a|sha22ah|sh2a)\b/g, 'شقه'],
+  [/\b(?:shu2a2|sho2a2|sho22a)\b/g, 'شقق'],
+  [/\b(?:3ayez|3awez|3aiz|3ayza|3awza|ayez|awez)\b/g, 'عايز'],
+  [/\b(?:arkhas|arkas|ar5as)\b/g, 'ارخص'],
+  [/\b(?:a8la|aghla|ag2la)\b/g, 'اغلي'],
+  [/\b(?:lel\s*bee3|lelbee3|lel\s*bei3|bee3|bei3)\b/g, 'للبيع'],
+  [
+    /\b(?:lel\s*egar|lelegar|lel\s*igar|el\s*egar|egar|igar|eg2ar)\b/g,
+    'للايجار',
+  ],
+  [/\b(?:ma3ady|ma3adi|el\s*ma3ady|elma3ady)\b/g, 'المعادي'],
+  [
+    /\b(?:masr\s*el\s*gedida|masr\s*elgedida|masr\s*gdida|masr\s*el\s*gdida)\b/g,
+    'مصر الجديده',
+  ],
+  [/\b(?:tagamo3|el\s*tagamo3|eltagamo3|tagamoa|tagam3)\b/g, 'التجمع الخامس'],
+  [/\b(?:madinet\s*nasr|madinat\s*nasr|madenet\s*nasr)\b/g, 'مدينة نصر'],
+  [/\b(?:mohandeseen|mohandessin|mohandesin)\b/g, 'المهندسين'],
+  [/\b(?:sheikh\s*zayed|el\s*sheikh\s*zayed)\b/g, 'الشيخ زايد'],
+  // `b` is the attached Egyptian "for": people write "bmelion", not "b melion".
+  [/\bb?(?:melion|melyon|malyon|milion|million)\b/g, 'مليون'],
+  [/\bb?(?:alf|alef|allf)\b/g, 'الف'],
+  [/\b(?:oda|odda|owda|ode)\b/g, 'اوضه'],
+  [/\b(?:odteen|odtein|owdteen|ghorfeteen|ghorfetein)\b/g, 'غرفتين'],
+  [/\b(?:ghoraf|8oraf|ghorfa|8orfa)\b/g, 'غرف'],
+  [/\b(?:mawgod|mawgoda|mawgoud|mawgouda|motah|mota7)\b/g, 'معروض'],
+  [/\b(?:semsar|samsar|sameser)\b/g, 'سمسار'],
+  [/\b(?:malek|el\s*malek|elmalek|sa7eb)\b/g, 'المالك'],
+  [/\b(?:matr|meter|metr)\b/g, 'متر'],
+];
+
+/** Rewrites Latin-script Egyptian Arabic into the Arabic forms the rules match. */
+function foldFranco(value: string): string {
+  let folded = value;
+  for (const [pattern, replacement] of FRANCO_TOKENS) {
+    folded = folded.replace(pattern, replacement);
+  }
+  return folded;
+}
+
 /** Folds Arabic orthographic variants and digits so user spelling differences match. */
 export function normalizeText(value: string): string {
-  return value
+  return foldFranco(value.toLowerCase())
     .replace(ARABIC_DIACRITICS, '')
     .replace(TATWEEL, '')
     .replace(ARABIC_INDIC_DIGITS, (digit) => String(digit.charCodeAt(0) & 0x0f))
@@ -192,6 +242,57 @@ function matchCountedNoun(
     return value;
   }
   return undefined;
+}
+
+const BEDROOM_NOUNS =
+  'اوضتين|اوضه|اوض|غرفتين|غرفه|غرف|حجرتين|حجره|حجر|bedrooms|bedroom|beds|bed|br';
+
+/** "غرفتين بس", "٣ غرف بالظبط", "only two bedrooms" — an exact count, not a floor. */
+const EXACT_COUNT_MARKER =
+  /^[\s؀-ۿ]{0,3}(?:بس|فقط|بالظبط|بالضبط|لا اكتر|مش اكتر)|^\s*(?:only|exactly|no more)/;
+
+/**
+ * Reads a bedroom requirement as a range rather than only a floor.
+ *
+ * "غرفتين بس" means exactly two, and answering it with every three and four
+ * bedroom home answers a different question. A stated range is read as one too.
+ */
+function extractBedrooms(
+  text: string,
+  consumed: Consumed,
+): { min?: number; max?: number } {
+  const quantity = `(?:\\d+|${WORD_NUMBER_PATTERN})`;
+  const range = new RegExp(
+    `(?:من\\s*)?(${quantity})\\s*(?:لـ|الي|ل|-|to|and|و)\\s*(${quantity})\\s*(?:${BEDROOM_NOUNS})`,
+  );
+  const rangeMatch = range.exec(text);
+  if (rangeMatch) {
+    const low = numberFrom(rangeMatch[1] as string);
+    const high = numberFrom(rangeMatch[2] as string);
+    if (low !== undefined && high !== undefined && low <= high && high <= 20) {
+      consumed.claim(rangeMatch.index, rangeMatch.index + rangeMatch[0].length);
+      return { min: low, max: high };
+    }
+  }
+
+  const single = matchCountedNoun(text, BEDROOM_NOUNS, consumed);
+  const value =
+    single !== undefined && single >= 1 && single <= 20
+      ? Math.round(single)
+      : DUAL_ROOM_WORDS.test(text)
+        ? 2
+        : undefined;
+  if (value === undefined) return {};
+
+  // The marker has to follow the count closely; further away it is usually the
+  // ordinary Egyptian "بس" meaning "but" rather than "only".
+  const nounEnd = new RegExp(`(?:${BEDROOM_NOUNS})`, 'g');
+  let exact = false;
+  for (const match of text.matchAll(nounEnd)) {
+    const after = text.slice(match.index + match[0].length);
+    if (EXACT_COUNT_MARKER.test(after)) exact = true;
+  }
+  return exact ? { min: value, max: value } : { min: value };
 }
 
 type Amount = { value: number; start: number; end: number };
@@ -379,17 +480,14 @@ export function extractFacets(
     consumed,
   );
 
-  const bedrooms = matchCountedNoun(
-    text,
-    'اوضتين|اوضه|اوض|غرفتين|غرفه|غرف|حجرتين|حجره|حجر|bedrooms|bedroom|beds|bed|br',
-    consumed,
-  );
-  if (bedrooms !== undefined && bedrooms >= 1 && bedrooms <= 20) {
-    filters.bedroomsMin = Math.round(bedrooms);
+  const bedrooms = extractBedrooms(text, consumed);
+  if (bedrooms.min !== undefined) {
+    filters.bedroomsMin = bedrooms.min;
     signalCount += 1;
-  } else if (DUAL_ROOM_WORDS.test(text)) {
-    filters.bedroomsMin = 2;
-    signalCount += 1;
+  }
+  if (bedrooms.max !== undefined) {
+    filters.bedroomsMax = bedrooms.max;
+    if (bedrooms.min === undefined) signalCount += 1;
   }
 
   const size = matchCountedNoun(
@@ -505,4 +603,65 @@ function matchParticipation(text: string): ParticipationLabel[] | undefined {
   return VERIFIED_PATTERN.test(text)
     ? ['verified_owner']
     : ['verified_owner', 'owner_not_verified'];
+}
+
+/**
+ * Constraints people ask for that the public search contract cannot express.
+ *
+ * The listing card exposes purpose, type, price, size, bedrooms, area, and
+ * participation. Anything else in a question — a finishing level, a floor, a
+ * garage, a view — has to be reported back rather than quietly discarded, or the
+ * answer describes a search that never happened.
+ */
+const UNSUPPORTED_PATTERNS: ReadonlyArray<[RegExp, UnsupportedConstraint]> = [
+  [/(?:تشطيب|نص تشطيب|لوكس|سوبر لوكس|finishing|finished)/, 'finishing'],
+  [/(?:الدور|دور ارضي|دور عالي|الطابق|ground floor|top floor|floor)/, 'floor'],
+  [/(?:حمام|حمامات|حمامين|bathroom|bathrooms)/, 'bathrooms'],
+  [/(?:مفروش|مفروشه|فرش|furnished|unfurnished)/, 'furnished'],
+  [/(?:جراج|جراش|كراج|موقف سياره|parking|garage)/, 'parking'],
+  [/(?:اسانسير|مصعد|elevator|lift)/, 'elevator'],
+  [
+    /(?:حديقه|جنينه|بلكونه|تراس|روف|حمام سباحه|garden|balcony|terrace|pool)/,
+    'outdoor_space',
+  ],
+  [/(?:كمبوند|كومبوند|compound|gated)/, 'compound'],
+  [
+    /(?:قريب|قريبه|جنب|علي النيل|المترو|near|close to|nile view|metro|view)/,
+    'nearby',
+  ],
+  [
+    /(?:تقسيط|مقدم|كاش|تفاوض|قابل للتفاوض|استلام|installment|instalment|down payment|negotiab|cash)/,
+    'payment_terms',
+  ],
+  [
+    /(?:متوسط|المتوسط|اكبر|اصغر|احصائ|كام في المتوسط|average|median|largest|smallest|biggest)/,
+    'aggregate',
+  ],
+];
+
+/** Which unsupported constraints a question mentions, in a stable order. */
+export function detectUnsupported(rawMessage: string): UnsupportedConstraint[] {
+  const text = normalizeText(rawMessage);
+  const found = new Set<UnsupportedConstraint>();
+  for (const [pattern, constraint] of UNSUPPORTED_PATTERNS) {
+    if (pattern.test(text)) found.add(constraint);
+  }
+  return [...found];
+}
+
+/** Every governed area a question names, so asking about two can be answered honestly. */
+export function matchAllAreas(
+  rawMessage: string,
+  areas: ReadonlyArray<AssistantAreaOption>,
+): AssistantAreaOption[] {
+  const text = normalizeText(rawMessage);
+  const matched: AssistantAreaOption[] = [];
+  for (const area of areas) {
+    const names = [area.nameAr, area.nameEn, ...area.aliases];
+    const hit = names.some((name) =>
+      areaKeys(name).some((key) => key.length >= 3 && text.includes(key)),
+    );
+    if (hit) matched.push(area);
+  }
+  return matched;
 }

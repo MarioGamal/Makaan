@@ -2,6 +2,7 @@ import type {
   AssistantFilters,
   AssistantIntent,
   AssistantRelaxation,
+  UnsupportedConstraint,
 } from '@makaan/shared/types/assistant';
 import type { Locale } from '@makaan/shared/types/marketplace';
 
@@ -20,7 +21,12 @@ import {
   PRIVACY_BOUNDARY_KEYWORDS,
   UNSUPPORTED_AREA_HINTS,
 } from './assistant-knowledge';
-import { extractFacets, normalizeText } from './assistant-language';
+import {
+  detectUnsupported,
+  extractFacets,
+  matchAllAreas,
+  normalizeText,
+} from './assistant-language';
 
 /**
  * Counted forms per property type: singular, dual, 3-10 plural, and 11+ singular
@@ -124,6 +130,12 @@ export class DeterministicAssistantProvider implements AssistantProvider {
       input.areas,
     );
 
+    const unsupported = detectUnsupported(input.message);
+    // Naming two governed areas is a comparison, which one search cannot answer.
+    if (matchAllAreas(input.message, input.areas).length > 1) {
+      unsupported.push('area_comparison');
+    }
+
     const privacyScore = bestKeywordLength(text, PRIVACY_INDEX);
     let topicId: string | undefined;
     let topicScore = 0;
@@ -145,6 +157,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         filters: {},
         topics: ['approximate_location', 'contact_seller'],
         resetContext: false,
+        unsupported,
       });
     }
 
@@ -161,6 +174,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         filters: {},
         topics: ['coverage'],
         resetContext: false,
+        unsupported,
       });
     }
 
@@ -171,6 +185,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         filters: {},
         topics: [topicId],
         resetContext: false,
+        unsupported,
       });
     }
 
@@ -180,6 +195,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         filters,
         topics: [],
         resetContext,
+        unsupported,
       });
     }
 
@@ -194,6 +210,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         filters: {},
         topics: [],
         resetContext,
+        unsupported,
       });
     }
 
@@ -202,11 +219,19 @@ export class DeterministicAssistantProvider implements AssistantProvider {
       filters: {},
       topics: [],
       resetContext: false,
+      unsupported,
     });
   }
 
   compose(input: AssistantCompositionInput): Promise<AssistantComposition> {
     const { locale } = input;
+    // Only a search can present results as though a constraint had been applied,
+    // so only a search carries the disclosure. The other answers address the
+    // subject directly and appending it there would merely repeat them.
+    const note =
+      input.intent === 'search'
+        ? this.unsupportedNote(input.unsupported, locale)
+        : '';
     switch (input.intent) {
       case 'faq':
         return Promise.resolve({
@@ -252,10 +277,81 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         });
       default:
         return Promise.resolve({
-          reply: this.searchAnswer(input),
+          reply: this.searchAnswer(input) + note,
           suggestions: this.suggestions(input),
         });
     }
+  }
+
+  /**
+   * States plainly which stated constraints were not applied.
+   *
+   * Public search covers purpose, type, area, price, size, bedrooms, and the
+   * participation label. A question that also names a finishing level, a floor, a
+   * garage, or an average cannot be answered by narrowing the search, and saying
+   * nothing would present the result as though it had been.
+   */
+  private unsupportedNote(
+    unsupported: ReadonlyArray<UnsupportedConstraint>,
+    locale: Locale,
+  ): string {
+    if (unsupported.length === 0) return '';
+    const arabic = locale === 'ar';
+    const labels: Record<UnsupportedConstraint, { ar: string; en: string }> = {
+      finishing: { ar: 'التشطيب', en: 'finishing level' },
+      floor: { ar: 'الدور', en: 'floor' },
+      bathrooms: { ar: 'عدد الحمامات', en: 'bathroom count' },
+      furnished: { ar: 'الفرش', en: 'furnishing' },
+      parking: { ar: 'الجراج', en: 'parking' },
+      elevator: { ar: 'الأسانسير', en: 'a lift' },
+      outdoor_space: { ar: 'الحديقة أو البلكونة', en: 'garden or balcony' },
+      compound: { ar: 'الكمبوند', en: 'compound' },
+      nearby: { ar: 'القرب من مكان معيّن', en: 'proximity to a landmark' },
+      payment_terms: { ar: 'شروط الدفع', en: 'payment terms' },
+      aggregate: {
+        ar: 'الحسابات زي المتوسط',
+        en: 'aggregates such as averages',
+      },
+      area_comparison: {
+        ar: 'المقارنة بين منطقتين',
+        en: 'comparing two areas',
+      },
+    };
+
+    // Two of these are not filters at all, so they get their own wording rather
+    // than being folded into a "cannot filter by" list that would read oddly.
+    const sentences: string[] = [];
+    if (unsupported.includes('area_comparison')) {
+      sentences.push(
+        arabic
+          ? 'سألت عن أكتر من منطقة، وأنا بدوّر في منطقة واحدة في المرة — اسألني عن كل واحدة لوحدها.'
+          : 'You named more than one area, and I search one at a time — ask about each separately.',
+      );
+    }
+    if (unsupported.includes('aggregate')) {
+      sentences.push(
+        arabic
+          ? 'ومقدرش أحسب متوسطات ولا أرتّب بالمساحة — أقدر أرتّب بالسعر أو بالأحدث بس.'
+          : 'I also cannot compute averages or rank by size — I can only sort by price or by newest.',
+      );
+    }
+
+    const filterable = unsupported.filter(
+      (item) => item !== 'area_comparison' && item !== 'aggregate',
+    );
+    if (filterable.length > 0) {
+      const named = filterable
+        .map((item) => (arabic ? labels[item].ar : labels[item].en))
+        .join(arabic ? ' و' : ', ');
+      sentences.push(
+        arabic
+          ? `مقدرش أفلتر بـ${named}، فالنتايج دي مش متفلترة على الأساس ده — راجع تفاصيل كل إعلان. اللي أقدر أفلتر بيه: المنطقة، الغرض، النوع، السعر، المساحة، عدد الغرف، ونوع المُعلن.`
+          : `I cannot filter by ${named}, so these results are not narrowed by it — check each listing's details. What I can filter by: area, purpose, type, price, size, bedrooms, and participation.`,
+      );
+    }
+
+    const label = arabic ? ' ملاحظة: ' : ' Note: ';
+    return label + sentences.join(' ');
   }
 
   private knowledgeAnswer(topics: ReadonlyArray<string>, locale: Locale) {
@@ -369,6 +465,13 @@ export class DeterministicAssistantProvider implements AssistantProvider {
               : `I lowered the bedroom count from ${relaxation.from} to ${relaxation.to} to find results.`,
           );
           break;
+        case 'bedrooms_ceiling_dropped':
+          sentences.push(
+            arabic
+              ? `مفيش حاجة${where} بـ ${this.formatNumber(relaxation.from, locale)} غرف بالظبط، فوسّعت لعدد أكبر كمان.`
+              : `Nothing${where} has exactly ${relaxation.from} bedrooms, so I also allowed larger homes.`,
+          );
+          break;
         case 'bedrooms_dropped':
           sentences.push(
             arabic
@@ -443,11 +546,30 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     const areaName = arabic ? filters.areaNameAr : filters.areaNameEn;
     if (areaName) parts.push(arabic ? `في ${areaName}` : `in ${areaName}`);
 
-    if (filters.bedroomsMin !== undefined) {
+    const { bedroomsMin: bedsMin, bedroomsMax: bedsMax } = filters;
+    if (bedsMin !== undefined && bedsMin === bedsMax) {
       parts.push(
         arabic
-          ? `${this.formatNumber(filters.bedroomsMin, locale)} غرف فأكتر`
-          : `${filters.bedroomsMin}+ bedrooms`,
+          ? `${this.formatNumber(bedsMin, locale)} غرف بالظبط`
+          : `exactly ${bedsMin} bedrooms`,
+      );
+    } else if (bedsMin !== undefined && bedsMax !== undefined) {
+      parts.push(
+        arabic
+          ? `من ${this.formatNumber(bedsMin, locale)} لـ ${this.formatNumber(bedsMax, locale)} غرف`
+          : `${bedsMin} to ${bedsMax} bedrooms`,
+      );
+    } else if (bedsMin !== undefined) {
+      parts.push(
+        arabic
+          ? `${this.formatNumber(bedsMin, locale)} غرف فأكتر`
+          : `${bedsMin}+ bedrooms`,
+      );
+    } else if (bedsMax !== undefined) {
+      parts.push(
+        arabic
+          ? `${this.formatNumber(bedsMax, locale)} غرف على الأكتر`
+          : `up to ${bedsMax} bedrooms`,
       );
     }
     if (filters.sizeMin !== undefined) {

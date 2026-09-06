@@ -72,7 +72,9 @@ type AreaSearchResponse = { items: PublicArea[] };
 `GET /listings`
 
 Supported query fields: `locale`, `purpose`, repeated `areaId`, repeated `propertyType`, `priceMin`,
-`priceMax`, `sizeMin`, `sizeMax`, `bedroomsMin`, `participation`, `bbox`, `sort`, `page`, and `pageSize`.
+`priceMax`, `sizeMin`, `sizeMax`, `bedroomsMin`, `bedroomsMax`, `participation`, `bbox`, `sort`, `page`,
+and `pageSize`. `bedroomsMax` bounds the count from above so an exact requirement such as "two bedrooms
+only" is expressible rather than being widened to "two or more".
 `purpose` is `sale|long_term_rent`; `participation` is
 `verified_owner|owner_not_verified|declared_agent`. A bbox is `west,south,east,north`, is bounded to Cairo,
 and filters approved approximate points only. Area-only listings remain in the area-filter result set but
@@ -161,10 +163,25 @@ type AssistantMessageResponse = {
   totalMatches: number;
   filters: AssistantFilters;
   relaxations: AssistantRelaxation[];
+  unsupported: UnsupportedConstraint[];
   browseQuery: string;
   suggestions: string[];
   topics: string[];
 };
+
+type UnsupportedConstraint =
+  | 'finishing'
+  | 'floor'
+  | 'bathrooms'
+  | 'furnished'
+  | 'parking'
+  | 'elevator'
+  | 'outdoor_space'
+  | 'compound'
+  | 'nearby'
+  | 'payment_terms'
+  | 'aggregate'
+  | 'area_comparison';
 ```
 
 Assistant invariants:
@@ -178,6 +195,9 @@ Assistant invariants:
    is reported in `relaxations`. `purpose` is never relaxed.
 5. A request for an exact address or a seller's contact returns `intent: 'privacy_boundary'` and no
    listings.
+6. A constraint the question states that public search cannot express — a finishing level, a floor, a
+   garage, an average — is reported in `unsupported` and named in `reply`. It is never dropped
+   silently, because results presented without it would describe a search that did not happen.
 
 ## Seller
 
