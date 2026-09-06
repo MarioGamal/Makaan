@@ -22,6 +22,41 @@ import {
 } from './assistant-knowledge';
 import { extractFacets, normalizeText } from './assistant-language';
 
+/**
+ * Counted forms per property type: singular, dual, 3-10 plural, and 11+ singular
+ * for Arabic; singular and plural for English.
+ */
+const COUNTED_TYPE_NOUNS: Record<string, { ar: string[]; en: string[] }> = {
+  Apartment: {
+    ar: ['شقة واحدة', 'شقتين', 'شقق', 'شقة'],
+    en: ['apartment', 'apartments'],
+  },
+  Villa: {
+    ar: ['فيلا واحدة', 'فيلتين', 'فيلات', 'فيلا'],
+    en: ['villa', 'villas'],
+  },
+  Duplex: {
+    ar: ['دوبلكس واحد', 'دوبلكسين', 'وحدات دوبلكس', 'وحدة دوبلكس'],
+    en: ['duplex', 'duplexes'],
+  },
+  Penthouse: {
+    ar: ['بنتهاوس واحد', 'بنتهاوسين', 'وحدات بنتهاوس', 'وحدة بنتهاوس'],
+    en: ['penthouse', 'penthouses'],
+  },
+  Studio: {
+    ar: ['استوديو واحد', 'استوديوهين', 'استوديوهات', 'استوديو'],
+    en: ['studio', 'studios'],
+  },
+  Townhouse: {
+    ar: ['تاون هاوس واحد', 'تاون هاوسين', 'وحدات تاون هاوس', 'وحدة تاون هاوس'],
+    en: ['townhouse', 'townhouses'],
+  },
+  Chalet: {
+    ar: ['شاليه واحد', 'شاليهين', 'شاليهات', 'شاليه'],
+    en: ['chalet', 'chalets'],
+  },
+};
+
 const PROPERTY_TYPE_LABELS: Record<string, Record<Locale, string>> = {
   Apartment: { ar: 'شقق', en: 'apartments' },
   Villa: { ar: 'فيلات', en: 'villas' },
@@ -113,18 +148,10 @@ export class DeterministicAssistantProvider implements AssistantProvider {
       });
     }
 
-    if (topicId && topicScore > 0 && topicScore >= signalCount * 4) {
-      // No search runs for an FAQ answer, so no filters are claimed either.
-      return Promise.resolve({
-        intent: 'faq' as AssistantIntent,
-        filters: {},
-        topics: [topicId],
-        resetContext: false,
-      });
-    }
-
-    // A named place that is not a governed area must be answered as coverage,
-    // not silently searched across the areas Makaan does cover.
+    // A named place that is not a governed area must be answered as coverage, not
+    // silently searched across the areas Makaan does cover. This is checked before
+    // the knowledge base because a place name such as `الإسكندرية` is also a
+    // coverage keyword, and the out-of-scope answer names the covered areas back.
     if (
       filters.areaId === undefined &&
       bestKeywordLength(text, UNSUPPORTED_AREA_INDEX) > 0
@@ -133,6 +160,16 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         intent: 'out_of_scope' as AssistantIntent,
         filters: {},
         topics: ['coverage'],
+        resetContext: false,
+      });
+    }
+
+    if (topicId && topicScore > 0 && topicScore >= signalCount * 4) {
+      // No search runs for an FAQ answer, so no filters are claimed either.
+      return Promise.resolve({
+        intent: 'faq' as AssistantIntent,
+        filters: {},
+        topics: [topicId],
         resetContext: false,
       });
     }
@@ -254,9 +291,15 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         : `${carried}I searched for ${descriptor} and nothing matching is listed right now, even after widening the search. The areas currently covered are ${areas} — try one of those or change the budget and I will search again.`;
     }
 
-    const found = arabic
-      ? `لقيت ${this.countPhrase(totalMatches, locale)}`
-      : `I found ${this.countPhrase(totalMatches, locale)}`;
+    const counted = this.countPhrase(
+      totalMatches,
+      locale,
+      filters.propertyType,
+    );
+    const found = arabic ? `لقيت ${counted}` : `I found ${counted}`;
+    // The count already names the property type, so the description drops it and
+    // the two read as one sentence: "لقيت ٤ شقق للبيع في المعادي".
+    const qualifier = this.describeFilters(filters, locale, { omitType: true });
     // The range describes the cards actually returned, so when more matched than
     // were shown it has to say so rather than read as the range of all of them.
     const partial = totalMatches > input.shownCount;
@@ -279,15 +322,14 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     if (relaxations.length === 0) {
       // A dash instead of an adjective avoids Arabic number-gender agreement,
       // which would otherwise need a different word for one, two, and many.
-      return arabic
-        ? `${carried}${found} — ${descriptor}.${range}`
-        : `${carried}${found} matching ${descriptor}.${range}`;
+      const tail = qualifier ? ` ${qualifier}` : '';
+      return `${carried}${found}${tail}.${range}`;
     }
 
     const explanation = this.explainRelaxations(relaxations, filters, locale);
     return arabic
       ? `${carried}${explanation} ${found} كده.${range}`
-      : `${carried}${explanation} That gives ${this.countPhrase(totalMatches, locale)}.${range}`;
+      : `${carried}${explanation} That gives ${counted}.${range}`;
   }
 
   /** States plainly which constraint was loosened, so a widened result is never silent. */
@@ -368,17 +410,23 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     return sentences.join(' ');
   }
 
-  private describeFilters(filters: AssistantFilters, locale: Locale): string {
+  private describeFilters(
+    filters: AssistantFilters,
+    locale: Locale,
+    options: { omitType?: boolean } = {},
+  ): string {
     const arabic = locale === 'ar';
     const parts: string[] = [];
 
-    parts.push(
-      filters.propertyType
-        ? this.propertyTypeLabel(filters.propertyType, locale)
-        : arabic
-          ? 'عقارات'
-          : 'homes',
-    );
+    if (!options.omitType) {
+      parts.push(
+        filters.propertyType
+          ? this.propertyTypeLabel(filters.propertyType, locale)
+          : arabic
+            ? 'عقارات'
+            : 'homes',
+      );
+    }
 
     if (filters.purpose) {
       parts.push(
@@ -450,13 +498,34 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     return PROPERTY_TYPE_LABELS[value]?.[locale] ?? value;
   }
 
-  private countPhrase(count: number, locale: Locale): string {
-    if (locale === 'en') return count === 1 ? '1 home' : `${count} homes`;
-    if (count === 1) return 'عقار واحد';
-    if (count === 2) return 'عقارين';
+  /**
+   * Counts using the property type that was actually filtered on.
+   *
+   * "15 homes — apartments" reads as a count of every property, which invites the
+   * reader to compare it against a villa the search deliberately excluded. Naming
+   * the type in the count itself removes that ambiguity.
+   */
+  private countPhrase(
+    count: number,
+    locale: Locale,
+    propertyType?: string,
+  ): string {
+    const noun = propertyType
+      ? COUNTED_TYPE_NOUNS[propertyType]
+      : {
+          ar: ['عقار واحد', 'عقارين', 'عقارات', 'عقار'],
+          en: ['home', 'homes'],
+        };
+    if (!noun) return this.countPhrase(count, locale);
+
+    if (locale === 'en') {
+      return `${count} ${count === 1 ? noun.en[0] : noun.en[1]}`;
+    }
+    if (count === 1) return noun.ar[0] as string;
+    if (count === 2) return noun.ar[1] as string;
     const digits = this.formatNumber(count, locale);
     // Arabic counts 3–10 with a plural noun and 11 or more with a singular one.
-    return count <= 10 ? `${digits} عقارات` : `${digits} عقار`;
+    return count <= 10 ? `${digits} ${noun.ar[2]}` : `${digits} ${noun.ar[3]}`;
   }
 
   /**

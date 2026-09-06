@@ -87,7 +87,8 @@ const WORD_NUMBER_PATTERN = Object.keys(WORD_NUMBERS)
 const DUAL_ROOM_WORDS = /(?:غرفتين|اوضتين|حجرتين)/;
 
 const PROPERTY_TYPE_KEYWORDS: ReadonlyArray<[RegExp, string]> = [
-  [/(?:شقه|شقق|شق|apartment|apartments|flat|flats)/, 'Apartment'],
+  // `شق` on its own is omitted: it is a substring of unrelated words.
+  [/(?:شقه|شقق|apartment|apartments|flat|flats)/, 'Apartment'],
   [/(?:فيلا|فيلات|فلل|villa|villas)/, 'Villa'],
   [/(?:دوبلكس|دبلكس|duplex|duplexes)/, 'Duplex'],
   [/(?:بنتهاوس|بنت هاوس|penthouse|penthouses)/, 'Penthouse'],
@@ -101,11 +102,26 @@ const SALE_PATTERN =
 const RENT_PATTERN =
   /(?:للايجار|ايجار|استاجر|اجار|تاجير|rent|rental|renting|for rent|lease|leasing)/;
 
-const OWNER_ONLY_PATTERN =
-  /(?:من المالك|من مالك|مالك|ملاك|صاحبها|صاحب العقار|من صاحبها|owner|owners|from the owner)/;
+/**
+ * Wraps Arabic alternatives so they only match as whole words.
+ *
+ * Arabic attaches the article and short prepositions directly to a word, so a
+ * plain `\b` is useless and a bare substring is dangerous: `مالك` ("owner") sits
+ * inside `الزمالك` ("Zamalek"), which silently turned a question about an area
+ * into an owners-only filter. The lookbehind admits an optional article and up to
+ * two proclitic letters, and the lookahead refuses any following Arabic letter.
+ */
+function arabicWord(alternatives: string): string {
+  return `(?<=(?:^|[^\\u0600-\\u06FF])[\\u0648\\u0641\\u0628\\u0643\\u0644]{0,2}(?:\\u0627\\u0644)?)(?:${alternatives})(?![\\u0600-\\u06FF])`;
+}
+
+const OWNER_ONLY_PATTERN = new RegExp(
+  `${arabicWord('مالك|ملاك|صاحبها|صاحب العقار')}|(?:من المالك|من مالك|من صاحبها)|\\b(?:owner|owners|from the owner)\\b`,
+);
 const VERIFIED_PATTERN = /(?:متحقق|موثق|موثوق|verified)/;
-const AGENT_PATTERN =
-  /(?:وسيط|وسطاء|سمسار|سماسره|بروكر|agent|agents|broker|brokers)/;
+const AGENT_PATTERN = new RegExp(
+  `${arabicWord('وسيط|وسطاء|سمسار|سماسره|بروكر')}|\\b(?:agent|agents|broker|brokers)\\b`,
+);
 const NEGATION_CUE =
   /(?:من غير|بدون|مش|ما ?عايز|ما ?عاوز|لا اريد|no|not|without|skip)\s*$/;
 
@@ -449,10 +465,15 @@ export function extractFacets(
     signalCount += 1;
   }
 
+  // "إيه المعروض" is a request to see the catalogue, so scope wording is itself a
+  // search signal; without it the message would fall through to the generic help.
+  const scoped = SCOPE_RESET_PATTERN.test(text);
+  if (scoped) signalCount += 1;
+
   return {
     filters,
     signalCount,
-    resetContext: RESET_PATTERN.test(text) || SCOPE_RESET_PATTERN.test(text),
+    resetContext: RESET_PATTERN.test(text) || scoped,
   };
 }
 
