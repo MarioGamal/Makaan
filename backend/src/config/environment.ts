@@ -5,6 +5,7 @@ export type OtpProviderMode = 'local_fixed' | 'twilio';
 export type MediaProviderMode = 'local' | 'cloudinary' | 's3';
 export type MalwareScannerProviderMode = 'deterministic' | 'clamav';
 export type MapProviderMode = 'accessible_local' | 'mapbox';
+export type AssistantProviderMode = 'deterministic';
 export type DatabaseTlsMode = 'disable' | 'require' | 'verify-full';
 
 export interface EnvironmentConfig {
@@ -35,6 +36,7 @@ export interface EnvironmentConfig {
   mediaProvider: MediaProviderMode;
   malwareScannerProvider: MalwareScannerProviderMode;
   mapProvider: MapProviderMode;
+  assistantProvider: AssistantProviderMode;
   evidenceRetentionDays: number;
   logRetentionDays: number;
   logLevel: string;
@@ -91,7 +93,11 @@ const ABUSE_LIMIT_NAMES = [
   'ABUSE_AGENT_LISTING_SUBMISSION_LIMIT',
   'ABUSE_UPLOAD_LIMIT',
   'ABUSE_CONTACT_LIMIT',
+  'ABUSE_ASSISTANT_MESSAGE_LIMIT',
 ] as const;
+
+/** Assistant adapters this build can register. A model-backed adapter is a separate task. */
+const ASSISTANT_PROVIDERS = ['deterministic'] as const;
 
 function valueOf(environment: NodeJS.ProcessEnv, name: string): string {
   return environment[name]?.trim() ?? '';
@@ -495,6 +501,20 @@ export function parseEnvironment(
     ['accessible_local', 'mapbox'] as const,
     issues,
   );
+  // Optional with a safe default so existing environment files keep working.
+  // Selecting anything else fails closed until that adapter is registered.
+  const assistantProviderRaw = valueOf(environment, 'ASSISTANT_PROVIDER');
+  if (
+    assistantProviderRaw &&
+    !ASSISTANT_PROVIDERS.includes(assistantProviderRaw as AssistantProviderMode)
+  ) {
+    issues.push({
+      name: 'ASSISTANT_PROVIDER',
+      reason: `must be one of ${ASSISTANT_PROVIDERS.join(', ')}`,
+    });
+  }
+  const assistantProvider = (assistantProviderRaw ||
+    'deterministic') as AssistantProviderMode;
   const evidenceRetentionDays = positiveInteger(
     environment,
     'EVIDENCE_RETENTION_DAYS',
@@ -573,10 +593,9 @@ export function parseEnvironment(
     ) {
       issues.push({
         name: 'DATABASE_TLS_MODE',
-        reason:
-          production
-            ? 'must be verify-full in production'
-            : 'must enable TLS in demo mode',
+        reason: production
+          ? 'must be verify-full in production'
+          : 'must enable TLS in demo mode',
       });
     }
     if (databaseTlsMode === 'verify-full' && !databaseTlsCaFile) {
@@ -659,6 +678,7 @@ export function parseEnvironment(
     mediaProvider,
     malwareScannerProvider,
     mapProvider,
+    assistantProvider,
     evidenceRetentionDays,
     logRetentionDays,
     logLevel,

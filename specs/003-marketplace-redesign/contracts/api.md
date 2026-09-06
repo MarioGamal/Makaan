@@ -129,6 +129,56 @@ session/storage keys, scan metadata, or internal scores.
   native redirect. Expired, reused, principal-mismatched, rejected, or ineligible intents never reveal the
   destination and do not increment accepted contact metrics.
 
+## Assistant
+
+`POST /assistant/messages` with `{ message: string; locale?: 'ar'|'en'; context?: AssistantFilters }`
+→ `200 AssistantMessageResponse`
+
+Uses the anonymous subject cookie and anonymous CSRF token, and is rate limited separately from
+browsing. `message` is capped at 500 characters. `context` echoes `filters` from the previous reply so
+follow-up questions keep the established purpose, area, and budget.
+
+```ts
+type AssistantIntent = 'search' | 'faq' | 'greeting' | 'help' | 'privacy_boundary' | 'out_of_scope';
+
+type AssistantRelaxation =
+  | { kind: 'price_ceiling_raised'; from: number; to: number }
+  | { kind: 'price_ceiling_dropped'; from: number }
+  | { kind: 'bedrooms_lowered'; from: number; to: number }
+  | { kind: 'property_type_dropped'; from: string }
+  | { kind: 'participation_dropped' }
+  | { kind: 'size_dropped' }
+  | { kind: 'area_dropped'; from: string };
+
+type AssistantMessageResponse = {
+  messageId: string;
+  locale: 'ar' | 'en';
+  intent: AssistantIntent;
+  reply: string;
+  generated: true;
+  provider: string;
+  listings: PublicListingCard[];
+  totalMatches: number;
+  filters: AssistantFilters;
+  relaxations: AssistantRelaxation[];
+  browseQuery: string;
+  suggestions: string[];
+  topics: string[];
+};
+```
+
+Assistant invariants:
+
+1. `listings` is produced by the same public search projection as `GET /listings`. The assistant has no
+   other read path, so exact locations, seller contacts, and moderation data cannot reach a reply.
+2. `AssistantFilters` mirrors the public search filters exactly; a question can never widen what is
+   readable beyond what a visitor could select by hand.
+3. `generated` is always `true` and interfaces must label the reply as machine generated.
+4. When a search returns nothing, constraints are loosened one at a time and every loosened constraint
+   is reported in `relaxations`. `purpose` is never relaxed.
+5. A request for an exact address or a seller's contact returns `intent: 'privacy_boundary'` and no
+   listings.
+
 ## Seller
 
 ### Authentication

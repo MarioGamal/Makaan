@@ -1,6 +1,8 @@
 import type { PropsWithChildren } from 'react';
 import { useRouter } from 'next/router';
 
+import { AssistantWidget } from '../assistant/AssistantWidget';
+
 import { SiteFooter } from './SiteFooter';
 import { SiteHeader } from './SiteHeader';
 
@@ -12,6 +14,8 @@ export function AppShell({ children }: PropsWithChildren) {
       {!isAdmin && <SiteHeader />}
       <div className="flex-1">{children}</div>
       {!isAdmin && <SiteFooter />}
+      {/* Buyer-facing only: moderation screens stay free of the public assistant. */}
+      {!isAdmin && <AssistantWidget />}
     </div>
   );
 }
