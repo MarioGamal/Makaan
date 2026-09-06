@@ -38,6 +38,8 @@ export interface AssistantCompositionInput {
   totalMatches: number;
   shownCount: number;
   relaxations: AssistantRelaxation[];
+  /** True when filters carried over from an earlier turn shaped this answer. */
+  continuedFromContext: boolean;
   priceRange?: { min: number; max: number };
   areaNames: ReadonlyArray<{ nameAr: string; nameEn: string }>;
 }

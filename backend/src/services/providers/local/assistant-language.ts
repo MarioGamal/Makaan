@@ -119,6 +119,15 @@ const NEWEST_PATTERN = /(?:احدث|اجدد|اخر الاعلانات|newest|la
 const RESET_PATTERN =
   /(?:من الاول|ابدا من جديد|بحث جديد|امسح|الغي الفلاتر|reset|start over|new search|clear filters)/;
 
+/**
+ * Wording that scopes a question to everything published rather than to the
+ * search already in progress. "أغلى شقة معروضة" asks about the whole catalogue,
+ * so carrying over the previous area and budget would answer a different
+ * question than the one asked.
+ */
+const SCOPE_RESET_PATTERN =
+  /(?:معروضه|معروض|معروضين|متاحه|متاح|عندكم|علي الموقع|في الموقع|كلها|كل الاعلانات|بشكل عام|اي منطقه|listed|available|on the site|overall|in general|anywhere|any area)/;
+
 const PRICE_MAX_HINTS =
   /(?:تحت|اقل من|لحد|في حدود|بحدود|حوالي|في حدود|بحد اقصي|حد اقصي|ميزانيتي|ميزانيه|مش اكتر من|ما يزيد|under|below|up to|max|maximum|budget|at most|no more than)\s*$/;
 const PRICE_MIN_HINTS =
@@ -440,7 +449,11 @@ export function extractFacets(
     signalCount += 1;
   }
 
-  return { filters, signalCount, resetContext: RESET_PATTERN.test(text) };
+  return {
+    filters,
+    signalCount,
+    resetContext: RESET_PATTERN.test(text) || SCOPE_RESET_PATTERN.test(text),
+  };
 }
 
 /**

@@ -77,6 +77,9 @@ export class AssistantService {
     }
 
     const prices = listings.map((listing) => listing.priceEgp);
+    const continuedFromContext =
+      interpretation.intent === 'search' &&
+      this.inheritedFrom(interpretation.filters, appliedFilters);
     const composition = await this.provider.compose({
       locale,
       intent: interpretation.intent,
@@ -85,6 +88,7 @@ export class AssistantService {
       totalMatches,
       shownCount: listings.length,
       relaxations,
+      continuedFromContext,
       priceRange:
         prices.length > 0
           ? { min: Math.min(...prices), max: Math.max(...prices) }
@@ -138,6 +142,30 @@ export class AssistantService {
       delete merged.priceMax;
     }
     return merged;
+  }
+
+  /**
+   * Whether the answer used a filter the latest message did not state. A visitor
+   * who asks about "the most expensive apartment listed" should never be shown an
+   * area and a budget from an earlier turn without being told where they came from.
+   */
+  private inheritedFrom(
+    stated: AssistantFilters,
+    applied: AssistantFilters,
+  ): boolean {
+    const facets = [
+      'purpose',
+      'areaId',
+      'propertyType',
+      'priceMin',
+      'priceMax',
+      'sizeMin',
+      'bedroomsMin',
+      'participation',
+    ] as const;
+    return facets.some(
+      (facet) => applied[facet] !== undefined && stated[facet] === undefined,
+    );
   }
 
   /**

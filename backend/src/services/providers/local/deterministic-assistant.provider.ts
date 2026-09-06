@@ -238,42 +238,56 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     const { locale, filters, relaxations, totalMatches, priceRange } = input;
     const descriptor = this.describeFilters(filters, locale);
     const arabic = locale === 'ar';
+    // Filters kept from an earlier turn are announced, never applied silently.
+    const carried = input.continuedFromContext
+      ? arabic
+        ? 'كمّلت على بحثك السابق. '
+        : 'Continuing your previous search. '
+      : '';
 
     if (totalMatches === 0) {
       const areas = input.areaNames
         .map((area) => (arabic ? area.nameAr : area.nameEn))
         .join(arabic ? '، ' : ', ');
       return arabic
-        ? `دوّرت على ${descriptor} وللأسف مفيش أي حاجة مطابقة معروضة دلوقتي، حتى بعد ما وسّعت البحث. المناطق المتاحة حالياً هي ${areas} — جرّب واحدة منها أو غيّر الميزانية وأنا أعيد البحث.`
-        : `I searched for ${descriptor} and nothing matching is listed right now, even after widening the search. The areas currently covered are ${areas} — try one of those or change the budget and I will search again.`;
+        ? `${carried}دوّرت على ${descriptor} وللأسف مفيش أي حاجة مطابقة معروضة دلوقتي، حتى بعد ما وسّعت البحث. المناطق المتاحة حالياً هي ${areas} — جرّب واحدة منها أو غيّر الميزانية وأنا أعيد البحث.`
+        : `${carried}I searched for ${descriptor} and nothing matching is listed right now, even after widening the search. The areas currently covered are ${areas} — try one of those or change the budget and I will search again.`;
     }
 
     const found = arabic
       ? `لقيت ${this.countPhrase(totalMatches, locale)}`
       : `I found ${this.countPhrase(totalMatches, locale)}`;
-    const range =
-      priceRange && priceRange.min !== priceRange.max
+    // The range describes the cards actually returned, so when more matched than
+    // were shown it has to say so rather than read as the range of all of them.
+    const partial = totalMatches > input.shownCount;
+    const low = priceRange ? this.formatPrice(priceRange.min, locale) : '';
+    const high = priceRange ? this.formatPrice(priceRange.max, locale) : '';
+    const range = !priceRange
+      ? ''
+      : priceRange.min === priceRange.max
         ? arabic
-          ? ` الأسعار من ${this.formatPrice(priceRange.min, locale)} لـ ${this.formatPrice(priceRange.max, locale)}.`
-          : ` Prices range from ${this.formatPrice(priceRange.min, locale)} to ${this.formatPrice(priceRange.max, locale)}.`
-        : priceRange
+          ? ` السعر ${low}.`
+          : ` The price is ${low}.`
+        : partial
           ? arabic
-            ? ` السعر ${this.formatPrice(priceRange.min, locale)}.`
-            : ` The price is ${this.formatPrice(priceRange.min, locale)}.`
-          : '';
+            ? ` وردّيت أول ${this.formatNumber(input.shownCount, locale)}، أسعارهم من ${low} لـ ${high}.`
+            : ` Showing the first ${input.shownCount}, priced ${low} to ${high}.`
+          : arabic
+            ? ` الأسعار من ${low} لـ ${high}.`
+            : ` Prices range from ${low} to ${high}.`;
 
     if (relaxations.length === 0) {
       // A dash instead of an adjective avoids Arabic number-gender agreement,
       // which would otherwise need a different word for one, two, and many.
       return arabic
-        ? `${found} — ${descriptor}.${range}`
-        : `${found} matching ${descriptor}.${range}`;
+        ? `${carried}${found} — ${descriptor}.${range}`
+        : `${carried}${found} matching ${descriptor}.${range}`;
     }
 
     const explanation = this.explainRelaxations(relaxations, filters, locale);
     return arabic
-      ? `${explanation} ${found} كده.${range}`
-      : `${explanation} That gives ${this.countPhrase(totalMatches, locale)}.${range}`;
+      ? `${carried}${explanation} ${found} كده.${range}`
+      : `${carried}${explanation} That gives ${this.countPhrase(totalMatches, locale)}.${range}`;
   }
 
   /** States plainly which constraint was loosened, so a widened result is never silent. */
