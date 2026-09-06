@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -179,8 +180,10 @@ export function MarketplaceBrowser() {
         ) : view === 'map' ? (
           <div className="space-y-4">
             <SchematicMap
+              height={520}
               labels={copy}
               listings={listings}
+              locale={locale}
               onSelect={setSelectedId}
               selectedId={selectedId}
             />
@@ -291,6 +294,58 @@ export default function HomePage() {
     'sale' | 'long_term_rent' | undefined
   >();
   const [areaId, setAreaId] = useState<string>();
+  const [selectedMapId, setSelectedMapId] = useState<string>();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMapKey, setModalMapKey] = useState(0);
+  const [mapResetTrigger, setMapResetTrigger] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  const closeMapModal = () => {
+    setIsModalOpen(false);
+    setSelectedMapId(undefined);
+    setModalMapKey((prev) => prev + 1);
+    setMapResetTrigger((prev) => prev + 1);
+  };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      closeMapModal();
+    };
+    router.events?.on('routeChangeStart', handleRouteChange);
+    return () => {
+      router.events?.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isModalOpen) {
+        closeMapModal();
+      }
+    };
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isModalOpen]);
+
+  const mapListings = useListings({
+    locale,
+    page: 1,
+    pageSize: 20,
+    sort: 'newest',
+  });
+
   const featured = useListings({
     locale,
     page: 1,
@@ -309,11 +364,11 @@ export default function HomePage() {
     if (areaId) query.areaId = areaId;
     void router.push({ pathname: '/browse', query });
   };
-
   return (
-    <main className="bg-canvas pb-12 pt-3 md:pb-16 md:pt-5">
-      <div className="mx-auto max-w-[1580px] space-y-14 px-3 md:px-4 md:space-y-20">
-        <section className="editorial-hero relative isolate min-h-[660px] bg-primary shadow-panel md:min-h-[760px]">
+    <main className="bg-canvas pb-12 pt-2 md:pb-16 md:pt-3">
+      <div className="mx-auto max-w-[1580px] space-y-10 px-3 md:px-4 md:space-y-14">
+        {/* 1. Editorial Hero Section (Tailored to Viewport Height) */}
+        <section className="editorial-hero relative isolate min-h-[500px] h-[calc(100dvh-6rem)] max-h-[720px] rounded-[2rem] bg-primary shadow-panel">
           <Image
             alt=""
             className="editorial-hero__media object-cover"
@@ -330,25 +385,25 @@ export default function HomePage() {
             aria-hidden="true"
             className="editorial-hero__light absolute inset-0"
           />
-          <div className="relative flex min-h-[660px] flex-col justify-between p-5 text-white sm:p-8 md:min-h-[760px] md:p-10 lg:p-12">
-            <div className="hero-nav-in flex items-start justify-between gap-4 border-b border-white/35 pb-5 text-xs font-semibold sm:text-sm">
+          <div className="relative flex h-full flex-col justify-between p-4 sm:p-6 md:p-8 lg:p-9 text-white">
+            <div className="hero-nav-in flex items-start justify-between gap-4 border-b border-white/30 pb-2.5 text-xs font-semibold sm:text-sm">
               <p className="max-w-48 leading-relaxed text-white/90">
                 {copy.eyebrow}
               </p>
               <p className="text-end text-white/75">{copy.trustReview}</p>
             </div>
-            <div className="space-y-7">
-              <div className="hero-copy-in max-w-6xl">
-                <h1 className="editorial-display max-w-5xl text-[clamp(2.75rem,6.5vw,6rem)] text-balance">
+            <div className="space-y-3 sm:space-y-4 md:space-y-5">
+              <div className="hero-copy-in max-w-5xl">
+                <h1 className="editorial-display max-w-4xl text-[clamp(1.85rem,3.8vw,3.35rem)] text-balance leading-[1.12]">
                   {copy.headline}
                 </h1>
-                <p className="mt-5 max-w-xl text-base leading-relaxed text-white/85 md:text-lg">
+                <p className="mt-1.5 sm:mt-2 max-w-xl text-xs sm:text-sm md:text-base leading-relaxed text-white/85 line-clamp-2 md:line-clamp-none">
                   {copy.intro}
                 </p>
               </div>
-              <div className="hero-search-in grid items-end gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="rounded-[1.5rem] bg-white/95 p-3 text-ink shadow-panel backdrop-blur md:p-4">
-                  <div className="mb-3 flex flex-wrap gap-2" role="group">
+              <div className="hero-search-in grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="rounded-[1.25rem] sm:rounded-[1.5rem] bg-white/95 p-2.5 sm:p-3.5 text-ink shadow-panel backdrop-blur md:p-4">
+                  <div className="mb-2.5 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2" role="group">
                     {[
                       { value: undefined, label: copy.anyPurpose },
                       { value: 'sale' as const, label: copy.sale },
@@ -356,7 +411,7 @@ export default function HomePage() {
                     ].map((option) => (
                       <button
                         aria-pressed={purpose === option.value}
-                        className={`min-h-10 rounded-full px-4 text-sm font-semibold transition ${
+                        className={`min-h-8.5 sm:min-h-9.5 rounded-full px-3.5 sm:px-4 text-xs sm:text-sm font-semibold transition ${
                           purpose === option.value
                             ? 'bg-ink text-white'
                             : 'bg-surface-muted text-ink hover:bg-primary-soft'
@@ -369,18 +424,18 @@ export default function HomePage() {
                       </button>
                     ))}
                   </div>
-                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="grid gap-2 sm:gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                     <AreaSearchBar
                       label={copy.area}
                       onSelect={(area) => setAreaId(area.id)}
                     />
-                    <Button className="md:min-w-40" onClick={browse}>
+                    <Button className="md:min-w-36 min-h-10 sm:min-h-11 text-xs sm:text-sm" onClick={browse}>
                       {copy.search}
                     </Button>
                   </div>
                 </div>
                 <Link
-                  className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/50 bg-white/10 px-6 font-semibold text-white backdrop-blur transition hover:bg-white hover:text-ink"
+                  className="inline-flex min-h-10 sm:min-h-11 items-center justify-center rounded-full border border-white/30 bg-black/25 px-5 text-xs sm:text-sm font-semibold text-white backdrop-blur transition hover:bg-white hover:text-ink"
                   href="/browse"
                 >
                   {copy.browseListings} ↓
@@ -390,6 +445,7 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* 2. Featured Listings Section */}
         <section className="mx-auto max-w-7xl px-1 md:px-3">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -431,6 +487,7 @@ export default function HomePage() {
           ) : null}
         </section>
 
+        {/* 4. Trust Pillars Section */}
         <section className="mx-auto grid max-w-7xl gap-4 px-1 md:grid-cols-3 md:px-3">
           {[copy.trustOwner, copy.trustPrivacy, copy.trustReview].map(
             (item, index) => (
@@ -448,6 +505,142 @@ export default function HomePage() {
           )}
         </section>
       </div>
+
+      {/* Fullscreen Map Modal (Rendered via Portal to document.body) */}
+      {mounted && isModalOpen && createPortal(
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/75 p-3 backdrop-blur-sm sm:p-6 md:p-8"
+          onClick={closeMapModal}
+          role="dialog"
+        >
+          <div
+            className="relative flex h-[90vh] w-[95vw] max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl md:h-[85vh] md:rounded-[2rem]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5 sm:px-6">
+              <div className="flex items-center gap-3">
+                <h2 className="font-display text-base font-normal text-ink sm:text-lg">
+                  {copy.map}
+                </h2>
+                <span className="hidden rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-muted sm:inline-flex">
+                  {
+                    mapListings.listings.filter(
+                      (l) => l.publicLocation.mode === 'approximate',
+                    ).length
+                  }{' '}
+                  {locale === 'ar' ? 'موقع تقريبي' : 'verified locations'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Reset Map View Button */}
+                <button
+                  aria-label={
+                    locale === 'ar' ? 'إعادة ضبط الخريطة' : 'Reset map view'
+                  }
+                  className="flex h-8.5 items-center gap-1.5 rounded-full bg-surface-raised border border-border px-3 text-xs font-semibold text-ink shadow-sm transition hover:border-primary hover:text-primary active:scale-95 focus-visible:outline-none"
+                  onClick={() => {
+                    setSelectedMapId(undefined);
+                    setMapResetTrigger((prev) => prev + 1);
+                  }}
+                  title={
+                    locale === 'ar' ? 'إعادة ضبط الخريطة' : 'Reset map view'
+                  }
+                  type="button"
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="hidden xs:inline">
+                    {locale === 'ar' ? 'إعادة ضبط' : 'Reset'}
+                  </span>
+                </button>
+
+                <Link
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-raised px-4 py-1.5 text-xs font-bold text-ink shadow-sm transition hover:border-primary hover:bg-primary hover:text-white active:scale-95"
+                  href="/browse?view=map"
+                  onClick={closeMapModal}
+                >
+                  <span>{copy.browseListings}</span>
+                  <span aria-hidden="true" className="rtl:rotate-180">
+                    →
+                  </span>
+                </Link>
+                <button
+                  aria-label={locale === 'ar' ? 'إغلاق الخريطة' : 'Close map'}
+                  className="flex h-8.5 items-center gap-1.5 rounded-full bg-surface-raised border border-border px-3.5 text-xs font-bold text-ink shadow-sm transition hover:border-danger hover:bg-danger hover:text-white active:scale-95 focus-visible:outline-none"
+                  onClick={closeMapModal}
+                  title={locale === 'ar' ? 'إغلاق الخريطة' : 'Close map'}
+                  type="button"
+                >
+                  <span className="text-sm font-bold leading-none">✕</span>
+                  <span>{locale === 'ar' ? 'إغلاق' : 'Close'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Map Viewport - Confined strictly to remaining screen space */}
+            <div className="relative w-full flex-1 min-h-0 min-w-0 overflow-hidden">
+              <SchematicMap
+                className="h-full w-full rounded-none border-0 shadow-none"
+                height="100%"
+                key={`modal-map-${modalMapKey}`}
+                labels={copy}
+                listings={mapListings.listings}
+                locale={locale}
+                onReset={() => setSelectedMapId(undefined)}
+                onSelect={setSelectedMapId}
+                resetTrigger={mapResetTrigger}
+                selectedId={selectedMapId}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* 5. Airbnb-style Floating Bottom Pill */}
+      {mounted && !isModalOpen && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <button
+            aria-label={locale === 'ar' ? 'عرض الخريطة' : 'Show map'}
+            className="group flex items-center gap-2.5 rounded-full bg-ink px-6 py-3.5 text-sm font-bold text-white shadow-[0_12px_32px_rgba(25,42,37,0.35),0_2px_8px_rgba(0,0,0,0.15)] border border-white/15 transition-all duration-300 hover:scale-105 hover:bg-primary active:scale-95 cursor-pointer backdrop-blur-md"
+            onClick={() => {
+              setSelectedMapId(undefined);
+              setMapResetTrigger((prev) => prev + 1);
+              setIsModalOpen(true);
+            }}
+            type="button"
+          >
+            <span>{locale === 'ar' ? 'عرض الخريطة' : 'Show map'}</span>
+            <svg
+              className="h-4 w-4 text-white/90 transition-transform duration-300 group-hover:scale-110"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934a1.12 1.12 0 01-1.006 0L9.503 3.31a1.12 1.12 0 00-1.006 0L3.622 5.748A1.125 1.125 0 003 6.754v11.492c0 .836.88 1.38 1.628 1.006l3.869-1.934a1.12 1.12 0 011.006 0l4.994 2.497a1.12 1.12 0 001.006 0z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
     </main>
   );
 }
