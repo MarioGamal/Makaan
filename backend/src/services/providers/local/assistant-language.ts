@@ -395,6 +395,16 @@ export function extractFacets(
     signalCount += 1;
   }
 
+  // Sale prices and monthly rents sit on completely different scales, so a budget
+  // with no stated purpose would otherwise offer a 20,000 EGP monthly rent to
+  // someone who said "a million". Below the threshold the figure can only be a
+  // rent; at or above it, only a sale price. The chosen purpose is always named
+  // back in the reply, so a wrong guess is visible and easy to correct.
+  const statedBudget = Math.max(filters.priceMax ?? 0, filters.priceMin ?? 0);
+  if (filters.purpose === undefined && statedBudget > 0) {
+    filters.purpose = statedBudget >= 200_000 ? 'sale' : 'long_term_rent';
+  }
+
   for (const [pattern, propertyType] of PROPERTY_TYPE_KEYWORDS) {
     if (pattern.test(text)) {
       filters.propertyType = propertyType;

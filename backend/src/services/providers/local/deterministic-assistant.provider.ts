@@ -263,8 +263,10 @@ export class DeterministicAssistantProvider implements AssistantProvider {
           : '';
 
     if (relaxations.length === 0) {
+      // A dash instead of an adjective avoids Arabic number-gender agreement,
+      // which would otherwise need a different word for one, two, and many.
       return arabic
-        ? `${found} مطابق لـ ${descriptor}.${range}`
+        ? `${found} — ${descriptor}.${range}`
         : `${found} matching ${descriptor}.${range}`;
     }
 
@@ -443,10 +445,14 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     return count <= 10 ? `${digits} عقارات` : `${digits} عقار`;
   }
 
-  /** Renders digits in the same numeral system the interface uses for the locale. */
+  /**
+   * Renders digits in the same numeral system the interface uses for the locale.
+   * Two decimals keep a raised ceiling distinguishable from the price it found:
+   * at one decimal, a 1,450,000 result and a 1,500,000 budget both read as 1.5M.
+   */
   private formatNumber(value: number, locale: Locale): string {
     return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-EG', {
-      maximumFractionDigits: 1,
+      maximumFractionDigits: 2,
     }).format(value);
   }
 
