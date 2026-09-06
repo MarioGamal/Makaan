@@ -125,10 +125,8 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     input: AssistantInterpretationInput,
   ): Promise<AssistantInterpretation> {
     const text = normalizeText(input.message);
-    const { filters, signalCount, resetContext } = extractFacets(
-      input.message,
-      input.areas,
-    );
+    const { filters, signalCount, resetContext, standaloneRequest } =
+      extractFacets(input.message, input.areas);
 
     const unsupported = detectUnsupported(input.message);
     // Naming two governed areas is a comparison, which one search cannot answer.
@@ -158,6 +156,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         topics: ['approximate_location', 'contact_seller'],
         resetContext: false,
         unsupported,
+        standaloneRequest,
       });
     }
 
@@ -175,6 +174,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         topics: ['coverage'],
         resetContext: false,
         unsupported,
+        standaloneRequest,
       });
     }
 
@@ -186,6 +186,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         topics: [topicId],
         resetContext: false,
         unsupported,
+        standaloneRequest,
       });
     }
 
@@ -196,6 +197,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         topics: [],
         resetContext,
         unsupported,
+        standaloneRequest,
       });
     }
 
@@ -211,6 +213,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         topics: [],
         resetContext,
         unsupported,
+        standaloneRequest,
       });
     }
 
@@ -220,6 +223,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
       topics: [],
       resetContext: false,
       unsupported,
+      standaloneRequest,
     });
   }
 
@@ -695,7 +699,9 @@ export class DeterministicAssistantProvider implements AssistantProvider {
 
     if (intent === 'search') {
       if (filters.sort !== 'price_asc') {
-        suggestions.push(arabic ? 'ورّيني الأرخص' : 'Show the cheapest');
+        // Worded without a verb on purpose: a quick reply is a refinement of the
+        // current search, and "show me" would read as a fresh request.
+        suggestions.push(arabic ? 'الأرخص الأول' : 'Cheapest first');
       }
       if (!filters.participation) {
         suggestions.push(arabic ? 'من الملاك بس' : 'From owners only');

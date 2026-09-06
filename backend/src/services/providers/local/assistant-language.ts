@@ -182,6 +182,21 @@ const PRICIEST_PATTERN =
 // `القاهرة الجديدة`, where it says nothing about sorting.
 const NEWEST_PATTERN = /(?:احدث|اجدد|اخر الاعلانات|newest|latest)/;
 
+/**
+ * A message that states what the visitor wants, rather than adjusting a search
+ * already under way.
+ *
+ * Naming a want ("عاوز شقة غرفتين بس") or a property type is a complete request,
+ * and carrying an area or a budget into it from an earlier turn answers a
+ * question that was not asked. A fragment — "وفي القاهرة الجديدة؟", "الأرخص",
+ * "من الملاك بس" — has no subject of its own and is a genuine refinement.
+ */
+const REQUEST_VERB_PATTERN =
+  /(?:عايز|عاوز|عايزه|عاوزه|محتاج|محتاجه|اريد|ابحث|دورلي|دور لي|هاتلي|جبلي|وريني|ورني|i want|i need|looking for|show me|find me|search for|get me)/;
+
+const CONTINUATION_OPENER =
+  /^(?:و\s|وفي|وفى|وف\s|طب|طيب|وبعدين|وكمان|وايه|and\b|what about|how about)/;
+
 const RESET_PATTERN =
   /(?:من الاول|ابدا من جديد|بحث جديد|امسح|الغي الفلاتر|reset|start over|new search|clear filters)/;
 
@@ -459,6 +474,8 @@ export interface ExtractedFacets {
   /** Number of concrete search facets found, used to separate search from FAQ. */
   signalCount: number;
   resetContext: boolean;
+  /** True when the message is a complete request rather than a refinement. */
+  standaloneRequest: boolean;
 }
 
 export function extractFacets(
@@ -568,10 +585,17 @@ export function extractFacets(
   const scoped = SCOPE_RESET_PATTERN.test(text);
   if (scoped) signalCount += 1;
 
+  // A continuation opener always wins: "وفي القاهرة الجديدة؟" is a refinement even
+  // though it names an area, while "عاوز شقة في القاهرة الجديدة" is a new request.
+  const standaloneRequest =
+    !CONTINUATION_OPENER.test(text) &&
+    (REQUEST_VERB_PATTERN.test(text) || filters.propertyType !== undefined);
+
   return {
     filters,
     signalCount,
     resetContext: RESET_PATTERN.test(text) || scoped,
+    standaloneRequest,
   };
 }
 

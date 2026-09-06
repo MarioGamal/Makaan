@@ -29,6 +29,12 @@ export interface AssistantInterpretation {
   topics: string[];
   /** True when the visitor asked to start a new search rather than refine one. */
   resetContext: boolean;
+  /**
+   * True when the message states a complete request. Context is carried forward
+   * only into refinements, so naming what you want never inherits an area or a
+   * budget from an earlier turn.
+   */
+  standaloneRequest: boolean;
   /** Constraints the question stated that public search cannot express. */
   unsupported: UnsupportedConstraint[];
 }

@@ -59,7 +59,8 @@ export class AssistantService {
     const filters =
       interpretation.intent === 'search'
         ? this.mergeContext(interpretation.filters, context, {
-            reset: interpretation.resetContext,
+            reset:
+              interpretation.resetContext || interpretation.standaloneRequest,
           })
         : interpretation.filters;
 
@@ -119,9 +120,12 @@ export class AssistantService {
   }
 
   /**
-   * Carries the previous turn's filters into a follow-up question so "and in New
-   * Cairo?" keeps the purpose, budget, and bedroom count already established.
-   * A new area, purpose, or price in the latest message always wins.
+   * Carries the previous turn's filters into a follow-up so "وفي القاهرة الجديدة؟"
+   * keeps the purpose, budget, and bedroom count already established.
+   *
+   * Only refinements inherit. A message that states what the visitor wants —
+   * "عاوز شقة غرفتين بس" — is a complete request, and quietly adding the area from
+   * an earlier turn answers a narrower question than the one that was asked.
    */
   private mergeContext(
     filters: AssistantFilters,
