@@ -49,10 +49,18 @@ const FRANCO_TOKENS: Array<[RegExp, string]> = [
     /\b(?:masr\s*el\s*gedida|masr\s*elgedida|masr\s*gdida|masr\s*el\s*gdida)\b/g,
     'مصر الجديده',
   ],
-  [/\b(?:tagamo3|el\s*tagamo3|eltagamo3|tagamoa|tagam3)\b/g, 'التجمع الخامس'],
+  [
+    /\b(?:tagamo3|el\s*tagamo3|eltagamo3|tagamoa|tagam3|fifth\s*settlement|5th\s*settlement)\b/g,
+    'التجمع الخامس',
+  ],
   [/\b(?:madinet\s*nasr|madinat\s*nasr|madenet\s*nasr)\b/g, 'مدينة نصر'],
   [/\b(?:mohandeseen|mohandessin|mohandesin)\b/g, 'المهندسين'],
-  [/\b(?:sheikh\s*zayed|el\s*sheikh\s*zayed)\b/g, 'الشيخ زايد'],
+  // `zayed` reduces to a three-letter shape, too short for the fuzzy matcher's
+  // minimum, so the name is mapped outright.
+  [
+    /\b(?:sheikh\s*zayed|el\s*sheikh\s*zayed|shiekh\s*zayed|zayed|zaied|zayd)\b/g,
+    'الشيخ زايد',
+  ],
   // `b` is the attached Egyptian "for": people write "bmelion", not "b melion".
   [/\bb?(?:melion|melyon|malyon|milion|million)\b/g, 'مليون'],
   [/\bb?(?:alf|alef|allf)\b/g, 'الف'],
@@ -572,6 +580,197 @@ function areaKeys(name: string): string[] {
   return [...keys];
 }
 
+/**
+ * Words that must never be read as a place name on their own. Latin matching is
+ * vowel-insensitive, so without this list ordinary query words could reach an
+ * area whose transliteration happens to share a consonant shape.
+ */
+const LATIN_AREA_STOPWORDS = new Set([
+  'and',
+  'any',
+  'apartment',
+  'apartments',
+  'area',
+  'areas',
+  'available',
+  'bed',
+  'bedroom',
+  'bedrooms',
+  'best',
+  'budget',
+  'buy',
+  'cairo',
+  'cheap',
+  'cheapest',
+  'city',
+  'compound',
+  'cost',
+  'district',
+  'downtown',
+  'duplex',
+  'east',
+  'egp',
+  'expensive',
+  'find',
+  'flat',
+  'flats',
+  'floor',
+  'for',
+  'from',
+  'furnished',
+  'garden',
+  'home',
+  'homes',
+  'house',
+  'listed',
+  'listing',
+  'listings',
+  'looking',
+  'meter',
+  'meters',
+  'million',
+  'more',
+  'near',
+  'need',
+  'new',
+  'newest',
+  'north',
+  'only',
+  'owner',
+  'owners',
+  'parking',
+  'penthouse',
+  'please',
+  'price',
+  'priced',
+  'property',
+  'rent',
+  'rental',
+  'sale',
+  'sell',
+  'settlement',
+  'show',
+  'size',
+  'south',
+  'sqm',
+  'studio',
+  'thanks',
+  'the',
+  'townhouse',
+  'under',
+  'unit',
+  'villa',
+  'want',
+  'west',
+  'with',
+  'within',
+]);
+
+/**
+ * A vowel-insensitive shape for Latin spellings of Arabic place names.
+ *
+ * Egyptians transliterate the same area many ways — Zamalek, Zamalik, zamlek,
+ * El Zamalek — and the differences are almost entirely in the vowels, doubled
+ * letters, and the attached article. Masking those leaves a shape the spellings
+ * share, which a small edit distance then covers for the rest.
+ */
+function latinAreaKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[’'`]/g, '')
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\b(?:el|al|the)\b/g, ' ')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/ph/g, 'f')
+    .replace(/ck/g, 'k')
+    .replace(/[qc]/g, 'k')
+    .replace(/j/g, 'g')
+    .replace(/y/g, 'i')
+    .replace(/([a-z])\1+/g, '$1')
+    .replace(/[aeiou]/g, '*')
+    .replace(/\*+/g, '*');
+}
+
+/** Edit distance, bounded: anything past the limit stops early. */
+function withinDistance(left: string, right: string, limit: number): boolean {
+  if (Math.abs(left.length - right.length) > limit) return false;
+  let previous = Array.from({ length: right.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+    let best = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      const value = Math.min(
+        (current[j - 1] as number) + 1,
+        (previous[j] as number) + 1,
+        (previous[j - 1] as number) + cost,
+      );
+      current[j] = value;
+      if (value < best) best = value;
+    }
+    if (best > limit) return false;
+    previous = current;
+  }
+  return (previous[right.length] as number) <= limit;
+}
+
+/** Every Latin shape an area may be written as, including its distinctive words. */
+function latinAreaKeys(area: AssistantAreaOption): string[] {
+  const sources = [area.nameEn, ...area.aliases];
+  const keys = new Set<string>();
+  for (const source of sources) {
+    if (!/[a-z]/i.test(source)) continue;
+    const whole = latinAreaKey(source);
+    if (whole.length >= 4) keys.add(whole);
+    for (const word of source.toLowerCase().split(/\s+/)) {
+      if (LATIN_AREA_STOPWORDS.has(word.replace(/[^a-z]/g, ''))) continue;
+      const key = latinAreaKey(word);
+      if (key.length >= 4) keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
+/**
+ * Fallback for Latin place names that exact matching missed. Runs only after the
+ * reviewed names and aliases have failed, and a longer shape needs an exact match
+ * or a single edit; a short one must match exactly, because at four characters a
+ * single edit is most of the word.
+ */
+function matchAreaByShape(
+  text: string,
+  areas: ReadonlyArray<AssistantAreaOption>,
+): AssistantAreaOption | undefined {
+  const words = text.split(' ').filter((word) => /^[a-z]+$/.test(word));
+  if (words.length === 0) return undefined;
+
+  const candidates: string[] = [];
+  for (let i = 0; i < words.length; i += 1) {
+    for (let span = 1; span <= 3 && i + span <= words.length; span += 1) {
+      const phrase = words.slice(i, i + span);
+      if (phrase.every((word) => LATIN_AREA_STOPWORDS.has(word))) continue;
+      candidates.push(phrase.join(' '));
+    }
+  }
+
+  let best: { area: AssistantAreaOption; score: number } | undefined;
+  for (const area of areas) {
+    for (const key of latinAreaKeys(area)) {
+      const limit = key.length >= 6 ? 1 : 0;
+      for (const candidate of candidates) {
+        const candidateKey = latinAreaKey(candidate);
+        if (candidateKey.length < 4) continue;
+        if (!withinDistance(candidateKey, key, limit)) continue;
+        const score =
+          key.length * 10 - Math.abs(candidateKey.length - key.length);
+        if (!best || score > best.score) best = { area, score };
+      }
+    }
+  }
+  return best?.area;
+}
+
 /** Picks the governed area whose longest reviewed name or alias appears in the question. */
 export function matchArea(
   text: string,
@@ -589,7 +788,9 @@ export function matchArea(
       }
     }
   }
-  return best?.area;
+  // Reviewed names first; only if none of them appear is the Latin spelling of a
+  // place name matched by shape, so a governed alias always wins over a guess.
+  return best?.area ?? matchAreaByShape(text, areas);
 }
 
 export interface ExtractedFacets {
