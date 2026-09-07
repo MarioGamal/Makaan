@@ -674,9 +674,32 @@ const LATIN_AREA_STOPWORDS = new Set([
  * letters, and the attached article. Masking those leaves a shape the spellings
  * share, which a small edit distance then covers for the rest.
  */
+/**
+ * Digits Egyptians use as Arabic letters, resolved before punctuation is stripped.
+ *
+ * Without this, `ma3ady` breaks into two fragments and no shape can be read from
+ * it, which is why each such spelling used to need its own hand-written entry.
+ * Resolving them here means a newly governed area is understood in Latin script
+ * the moment it exists, with no code change of any kind.
+ */
+const ARABIZI_DIGITS: Record<string, string> = {
+  '2': '', // ء — a glottal stop, silent in a skeleton
+  '3': '', // ع — likewise
+  '4': 'd', // ذ
+  '5': 'k', // خ
+  '6': 't', // ط
+  '7': 'h', // ح
+  '8': 'g', // غ
+  '9': 's', // ص
+};
+
+const resolveArabizi = (value: string): string =>
+  value.replace(/(?<=[a-z])[2-9]|[2-9](?=[a-z])/g, (digit) =>
+    digit in ARABIZI_DIGITS ? (ARABIZI_DIGITS[digit] as string) : ' ',
+  );
+
 function latinAreaKey(value: string): string {
-  return value
-    .toLowerCase()
+  return resolveArabizi(value.toLowerCase())
     .replace(/[’'`]/g, '')
     .replace(/[^a-z\s]/g, ' ')
     .replace(/\b(?:el|al|the)\b/g, ' ')
@@ -754,8 +777,7 @@ function arabicSkeleton(value: string): string {
 /** Consonant skeleton of a Latin spelling, so it can be compared with the above. */
 function latinSkeleton(value: string): string {
   return (
-    value
-      .toLowerCase()
+    resolveArabizi(value.toLowerCase())
       .replace(/[^a-z\s]/g, ' ')
       .split(/\s+/)
       .filter(Boolean)
@@ -848,7 +870,14 @@ function matchAreaByShape(
   text: string,
   areas: ReadonlyArray<AssistantAreaOption>,
 ): AssistantAreaOption | undefined {
-  const words = text.split(' ').filter((word) => /^[a-z]+$/.test(word));
+  // Digits are admitted so Latin-script Arabic reaches the shape functions, which
+  // resolve them; a bare figure is excluded by requiring two letters.
+  const words = text
+    .split(' ')
+    .filter(
+      (word) =>
+        /^[a-z0-9]+$/.test(word) && (word.match(/[a-z]/g) ?? []).length >= 2,
+    );
   if (words.length === 0) return undefined;
 
   const candidates: string[] = [];
