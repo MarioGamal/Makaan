@@ -57,8 +57,12 @@ const FRANCO_TOKENS: Array<[RegExp, string]> = [
   [/\bb?(?:melion|melyon|malyon|milion|million)\b/g, 'مليون'],
   [/\bb?(?:alf|alef|allf)\b/g, 'الف'],
   [/\b(?:oda|odda|owda|ode)\b/g, 'اوضه'],
-  [/\b(?:odteen|odtein|owdteen|ghorfeteen|ghorfetein)\b/g, 'غرفتين'],
-  [/\b(?:ghoraf|8oraf|ghorfa|8orfa)\b/g, 'غرف'],
+  [
+    /\b(?:odteen|odtein|owdteen|ghorfeteen|ghorfetein|3orfeteen|3orfetein|8orfeteen|2odteen)\b/g,
+    'غرفتين',
+  ],
+  [/\b(?:ghoraf|8oraf|3oraf|ghorfa|8orfa|3orfa|odaf)\b/g, 'غرف'],
+  [/\b(?:rekhes|rekhees|rakhees|re5es)\b/g, 'رخيص'],
   [/\b(?:mawgod|mawgoda|mawgoud|mawgouda|motah|mota7)\b/g, 'معروض'],
   [/\b(?:semsar|samsar|sameser)\b/g, 'سمسار'],
   [/\b(?:malek|el\s*malek|elmalek|sa7eb)\b/g, 'المالك'],
@@ -76,19 +80,26 @@ function foldFranco(value: string): string {
 
 /** Folds Arabic orthographic variants and digits so user spelling differences match. */
 export function normalizeText(value: string): string {
-  return foldFranco(value.toLowerCase())
-    .replace(ARABIC_DIACRITICS, '')
-    .replace(TATWEEL, '')
-    .replace(ARABIC_INDIC_DIGITS, (digit) => String(digit.charCodeAt(0) & 0x0f))
-    .replace(
-      /[\u0623\u0625\u0622\u0671\u0649\u0629\u0624\u0626]/g,
-      (letter) => LETTER_FOLDING[letter] ?? letter,
-    )
-    .toLowerCase()
-    .replace(/(?<=\d)[,٬](?=\d{3}(?!\d))/g, '')
-    .replace(/[^\p{L}\p{N}.]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    foldFranco(value.toLowerCase())
+      .replace(ARABIC_DIACRITICS, '')
+      .replace(TATWEEL, '')
+      .replace(ARABIC_INDIC_DIGITS, (digit) =>
+        String(digit.charCodeAt(0) & 0x0f),
+      )
+      .replace(
+        /[\u0623\u0625\u0622\u0671\u0649\u0629\u0624\u0626]/g,
+        (letter) => LETTER_FOLDING[letter] ?? letter,
+      )
+      .toLowerCase()
+      // The Arabic decimal separator has to become a dot before punctuation is
+      // stripped, or "١٫٥ مليون" splits into "1 5 مليون" and reads as five million.
+      .replace(/(?<=\d)٫(?=\d)/g, '.')
+      .replace(/(?<=\d)[,٬](?=\d{3}(?!\d))/g, '')
+      .replace(/[^\p{L}\p{N}.]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 const WORD_NUMBERS: Record<string, number> = {
@@ -175,7 +186,10 @@ const AGENT_PATTERN = new RegExp(
 const NEGATION_CUE =
   /(?:من غير|بدون|مش|ما ?عايز|ما ?عاوز|لا اريد|no|not|without|skip)\s*$/;
 
-const CHEAPEST_PATTERN = /(?:ارخص|اقل سعر|اقل الاسعار|cheapest|lowest price)/;
+// "شقة رخيصة" is not a superlative but it does say which end of the range to
+// start from, so it sorts the same way "الأرخص" does.
+const CHEAPEST_PATTERN =
+  /(?:ارخص|اقل سعر|اقل الاسعار|رخيص|رخيصه|في المتناول|cheapest|lowest price|cheap|affordable|budget friendly)/;
 const PRICIEST_PATTERN =
   /(?:اغلي|اعلي سعر|اكبر سعر|most expensive|highest price)/;
 // `الجديد` alone is omitted on purpose: it also appears inside area names such as
@@ -196,6 +210,15 @@ const REQUEST_VERB_PATTERN =
 
 const CONTINUATION_OPENER =
   /^(?:و\s|وفي|وفى|وف\s|طب|طيب|وبعدين|وكمان|وايه|and\b|what about|how about)/;
+
+/**
+ * A request for the next page of the same search.
+ *
+ * It always refines, even though "ورّيني كمان" carries a request verb: asking for
+ * more of something only means anything relative to the search already on screen.
+ */
+const MORE_PATTERN =
+  /(?:كمان|المزيد|زياده|غيرهم|غيرها|التاني|الباقي|باقي النتايج|show more|more results|next page|others|anything else)/;
 
 const RESET_PATTERN =
   /(?:من الاول|ابدا من جديد|بحث جديد|امسح|الغي الفلاتر|reset|start over|new search|clear filters)/;
@@ -262,9 +285,16 @@ function matchCountedNoun(
 const BEDROOM_NOUNS =
   'اوضتين|اوضه|اوض|غرفتين|غرفه|غرف|حجرتين|حجره|حجر|bedrooms|bedroom|beds|bed|br';
 
-/** "غرفتين بس", "٣ غرف بالظبط", "only two bedrooms" — an exact count, not a floor. */
-const EXACT_COUNT_MARKER =
-  /^[\s؀-ۿ]{0,3}(?:بس|فقط|بالظبط|بالضبط|لا اكتر|مش اكتر)|^\s*(?:only|exactly|no more)/;
+/**
+ * Marks an exact bedroom count rather than a floor.
+ *
+ * `بس` also means "but", so in Arabic it only counts when it follows the count
+ * immediately; the unambiguous words are accepted anywhere in the short window
+ * after it, which is where English puts "only" — "2 bedroom apartment only".
+ */
+const EXACT_COUNT_IMMEDIATE = /^\s*(?:بس|فقط|only|exactly)/;
+const EXACT_COUNT_NEARBY =
+  /(?:بالظبط|بالضبط|لا اكتر|مش اكتر|\bonly\b|\bexactly\b|\bno more\b)/;
 
 /**
  * Reads a bedroom requirement as a range rather than only a floor.
@@ -305,7 +335,12 @@ function extractBedrooms(
   let exact = false;
   for (const match of text.matchAll(nounEnd)) {
     const after = text.slice(match.index + match[0].length);
-    if (EXACT_COUNT_MARKER.test(after)) exact = true;
+    if (
+      EXACT_COUNT_IMMEDIATE.test(after) ||
+      EXACT_COUNT_NEARBY.test(after.slice(0, 28))
+    ) {
+      exact = true;
+    }
   }
   return exact ? { min: value, max: value } : { min: value };
 }
@@ -476,6 +511,8 @@ export interface ExtractedFacets {
   resetContext: boolean;
   /** True when the message is a complete request rather than a refinement. */
   standaloneRequest: boolean;
+  /** True when the visitor asked for the next page of the current search. */
+  wantsMore: boolean;
 }
 
 export function extractFacets(
@@ -585,10 +622,14 @@ export function extractFacets(
   const scoped = SCOPE_RESET_PATTERN.test(text);
   if (scoped) signalCount += 1;
 
+  const wantsMore = MORE_PATTERN.test(text) && !scoped;
+  if (wantsMore) signalCount += 1;
+
   // A continuation opener always wins: "وفي القاهرة الجديدة؟" is a refinement even
   // though it names an area, while "عاوز شقة في القاهرة الجديدة" is a new request.
   const standaloneRequest =
     !CONTINUATION_OPENER.test(text) &&
+    !wantsMore &&
     (REQUEST_VERB_PATTERN.test(text) || filters.propertyType !== undefined);
 
   return {
@@ -596,6 +637,7 @@ export function extractFacets(
     signalCount,
     resetContext: RESET_PATTERN.test(text) || scoped,
     standaloneRequest,
+    wantsMore,
   };
 }
 

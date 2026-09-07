@@ -25,6 +25,12 @@ export interface AssistantFilters {
   bedroomsMax?: number;
   participation?: ParticipationLabel[];
   sort?: PublicSort;
+  /**
+   * Which page of the same search the answer covers. It rides with the filters
+   * because "show me more" only means anything relative to the search already
+   * established, and the interface echoes the whole object back unchanged.
+   */
+  page?: number;
 }
 
 /**
@@ -51,6 +57,7 @@ export type UnsupportedConstraint =
 export type AssistantRelaxation =
   | { kind: 'price_ceiling_raised'; from: number; to: number }
   | { kind: 'price_ceiling_dropped'; from: number }
+  | { kind: 'price_floor_dropped'; from: number }
   | { kind: 'bedrooms_lowered'; from: number; to: number }
   | { kind: 'bedrooms_dropped'; from: number }
   | { kind: 'bedrooms_ceiling_dropped'; from: number }

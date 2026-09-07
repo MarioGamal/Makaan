@@ -140,13 +140,21 @@ Uses the anonymous subject cookie and anonymous CSRF token, and is rate limited 
 browsing. `message` is capped at 500 characters. `context` echoes `filters` from the previous reply so
 follow-up questions keep the established purpose, area, and budget.
 
+Context is carried into refinements only. A message that states what the visitor wants — a request verb
+or a named property type — starts from what it says, because inheriting an area or a budget into it
+would answer a narrower question than the one asked. `filters.page` rides along so "show me more"
+advances through the same result set; any other message returns to page 1.
+
 ```ts
 type AssistantIntent = 'search' | 'faq' | 'greeting' | 'help' | 'privacy_boundary' | 'out_of_scope';
 
 type AssistantRelaxation =
   | { kind: 'price_ceiling_raised'; from: number; to: number }
   | { kind: 'price_ceiling_dropped'; from: number }
+  | { kind: 'price_floor_dropped'; from: number }
   | { kind: 'bedrooms_lowered'; from: number; to: number }
+  | { kind: 'bedrooms_ceiling_dropped'; from: number }
+  | { kind: 'bedrooms_dropped'; from: number }
   | { kind: 'property_type_dropped'; from: string }
   | { kind: 'participation_dropped' }
   | { kind: 'size_dropped' }

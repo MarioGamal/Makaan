@@ -97,6 +97,13 @@ export class AssistantContextDto {
   @IsOptional()
   @IsIn(['newest', 'price_asc', 'price_desc'])
   sort?: 'newest' | 'price_asc' | 'price_desc';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  page?: number;
 }
 
 export class AssistantMessageDto {

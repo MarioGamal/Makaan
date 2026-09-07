@@ -35,6 +35,8 @@ export interface AssistantInterpretation {
    * budget from an earlier turn.
    */
   standaloneRequest: boolean;
+  /** True when the visitor asked for the next page of the same search. */
+  wantsMore: boolean;
   /** Constraints the question stated that public search cannot express. */
   unsupported: UnsupportedConstraint[];
 }
@@ -52,6 +54,20 @@ export interface AssistantCompositionInput {
   /** Constraints that must be disclosed as not applied. */
   unsupported: UnsupportedConstraint[];
   priceRange?: { min: number; max: number };
+  /**
+   * The first card of the answer, present when the question asked for an extreme.
+   * A superlative wants one home named, not a count of everything that matched —
+   * and the count only grows less useful as the catalogue does.
+   */
+  highlight?: {
+    priceEgp: number;
+    propertyType: string;
+    bedrooms: number;
+    areaAr: string;
+    areaEn: string;
+  };
+  /** Which page of the same search this answer covers. */
+  page: number;
   areaNames: ReadonlyArray<{ nameAr: string; nameEn: string }>;
 }
 

@@ -101,11 +101,28 @@ function bestKeywordLength(
   for (const keyword of keywords) {
     if (keyword.length <= best) continue;
     const words = keyword.split(' ').filter(Boolean);
-    const matched =
-      words.length === 1
-        ? text.includes(keyword)
-        : words.every((word) => text.includes(word));
-    if (matched) best = keyword.length;
+    if (words.length === 1) {
+      if (text.includes(keyword)) best = keyword.length;
+      continue;
+    }
+    // The words must appear in the keyword's own order and within a short span.
+    // Requiring only that each word appears somewhere lets a long, unrelated
+    // message collect them by chance and match a topic it never asked about.
+    let cursor = 0;
+    let start = -1;
+    let matched = true;
+    for (const word of words) {
+      const at = text.indexOf(word, cursor);
+      if (at === -1) {
+        matched = false;
+        break;
+      }
+      if (start === -1) start = at;
+      cursor = at + word.length;
+    }
+    if (matched && cursor - start <= keyword.length + 24) {
+      best = keyword.length;
+    }
   }
   return best;
 }
@@ -125,7 +142,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     input: AssistantInterpretationInput,
   ): Promise<AssistantInterpretation> {
     const text = normalizeText(input.message);
-    const { filters, signalCount, resetContext, standaloneRequest } =
+    const { filters, signalCount, resetContext, standaloneRequest, wantsMore } =
       extractFacets(input.message, input.areas);
 
     const unsupported = detectUnsupported(input.message);
@@ -157,6 +174,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         resetContext: false,
         unsupported,
         standaloneRequest,
+        wantsMore,
       });
     }
 
@@ -175,6 +193,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         resetContext: false,
         unsupported,
         standaloneRequest,
+        wantsMore,
       });
     }
 
@@ -187,6 +206,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         resetContext: false,
         unsupported,
         standaloneRequest,
+        wantsMore,
       });
     }
 
@@ -198,6 +218,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         resetContext,
         unsupported,
         standaloneRequest,
+        wantsMore,
       });
     }
 
@@ -214,6 +235,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
         resetContext,
         unsupported,
         standaloneRequest,
+        wantsMore,
       });
     }
 
@@ -224,6 +246,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
       resetContext: false,
       unsupported,
       standaloneRequest,
+      wantsMore,
     });
   }
 
@@ -285,6 +308,60 @@ export class DeterministicAssistantProvider implements AssistantProvider {
           suggestions: this.suggestions(input),
         });
     }
+  }
+
+  /**
+   * Names the single home a superlative asked for, then offers the rest.
+   *
+   * Returns nothing unless the answer is actually sorted by price and sitting on
+   * the first page, because only then is the top card the extreme in question.
+   */
+  private superlativeLead(
+    input: AssistantCompositionInput,
+  ): string | undefined {
+    const { highlight, filters, locale, totalMatches } = input;
+    if (!highlight || !filters.sort || filters.sort === 'newest') {
+      return undefined;
+    }
+    const arabic = locale === 'ar';
+    const cheapest = filters.sort === 'price_asc';
+    // Named from the filter, not from the result: calling it "the cheapest studio"
+    // when no type was asked for implies a narrowing that never happened.
+    const type = filters.propertyType
+      ? this.propertyTypeSingular(filters.propertyType, locale)
+      : arabic
+        ? 'عقار'
+        : 'home';
+    const area = arabic ? highlight.areaAr : highlight.areaEn;
+    const price = this.formatPrice(highlight.priceEgp, locale);
+    const rest = totalMatches - 1;
+
+    // The area is named once, at the end, so the qualifier leaves it out.
+    const qualifier = this.describeFilters(filters, locale, {
+      omitType: true,
+      omitArea: true,
+    });
+    const opener = arabic
+      ? `${cheapest ? 'أرخص' : 'أغلى'} ${type} ${qualifier}`.trim()
+      : `The ${cheapest ? 'cheapest' : 'most expensive'} ${type} ${qualifier}`.trim();
+
+    // "بـ" instead of a possessive keeps the sentence right for both genders.
+    const head = arabic
+      ? `${opener} بـ ${price} في ${area}.`
+      : `${opener} is ${price} in ${area}.`;
+
+    if (rest <= 0) return head;
+    const alongside = Math.min(rest, input.shownCount - 1);
+    return arabic
+      ? `${head} دي ومعاها أقرب ${this.formatNumber(alongside, locale)} ليها، من إجمالي ${this.countPhrase(totalMatches, locale, filters.propertyType)}:`
+      : `${head} Here it is with the next ${alongside}, out of ${totalMatches} matches:`;
+  }
+
+  /** Singular form used when one specific home is being named. */
+  private propertyTypeSingular(value: string, locale: Locale): string {
+    const noun = COUNTED_TYPE_NOUNS[value];
+    if (!noun) return locale === 'ar' ? 'عقار' : 'home';
+    return locale === 'ar' ? (noun.ar[3] as string) : (noun.en[0] as string);
   }
 
   /**
@@ -413,15 +490,22 @@ export class DeterministicAssistantProvider implements AssistantProvider {
           : ` The price is ${low}.`
         : partial
           ? arabic
-            ? ` وردّيت أول ${this.formatNumber(input.shownCount, locale)}، أسعارهم من ${low} لـ ${high}.`
-            : ` Showing the first ${input.shownCount}, priced ${low} to ${high}.`
+            ? input.page > 1
+              ? ` دي ${this.formatNumber(input.shownCount, locale)} تانيين (صفحة ${this.formatNumber(input.page, locale)})، أسعارهم من ${low} لـ ${high}.`
+              : ` وردّيت أول ${this.formatNumber(input.shownCount, locale)}، أسعارهم من ${low} لـ ${high}.`
+            : input.page > 1
+              ? ` Here are ${input.shownCount} more (page ${input.page}), priced ${low} to ${high}.`
+              : ` Showing the first ${input.shownCount}, priced ${low} to ${high}.`
           : arabic
             ? ` الأسعار من ${low} لـ ${high}.`
             : ` Prices range from ${low} to ${high}.`;
 
+    // A superlative names the home it found. "I found 10,000 apartments" does not
+    // answer "which is the most expensive", and it reads worse as data grows.
+    const lead = this.superlativeLead(input);
+    if (lead && relaxations.length === 0) return `${carried}${lead}`;
+
     if (relaxations.length === 0) {
-      // A dash instead of an adjective avoids Arabic number-gender agreement,
-      // which would otherwise need a different word for one, two, and many.
       const tail = qualifier ? ` ${qualifier}` : '';
       return `${carried}${found}${tail}.${range}`;
     }
@@ -467,6 +551,13 @@ export class DeterministicAssistantProvider implements AssistantProvider {
             arabic
               ? `نزّلت عدد الغرف من ${this.formatNumber(relaxation.from, locale)} لـ ${this.formatNumber(relaxation.to, locale)} عشان ألاقي نتايج.`
               : `I lowered the bedroom count from ${relaxation.from} to ${relaxation.to} to find results.`,
+          );
+          break;
+        case 'price_floor_dropped':
+          sentences.push(
+            arabic
+              ? `مفيش حاجة${where} فوق ${this.formatPrice(relaxation.from, locale)}، فشلت الحد الأدنى للسعر.`
+              : `Nothing${where} is above ${this.formatPrice(relaxation.from, locale)}, so I dropped the minimum price.`,
           );
           break;
         case 'bedrooms_ceiling_dropped':
@@ -520,7 +611,7 @@ export class DeterministicAssistantProvider implements AssistantProvider {
   private describeFilters(
     filters: AssistantFilters,
     locale: Locale,
-    options: { omitType?: boolean } = {},
+    options: { omitType?: boolean; omitArea?: boolean } = {},
   ): string {
     const arabic = locale === 'ar';
     const parts: string[] = [];
@@ -548,7 +639,9 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     }
 
     const areaName = arabic ? filters.areaNameAr : filters.areaNameEn;
-    if (areaName) parts.push(arabic ? `في ${areaName}` : `in ${areaName}`);
+    if (areaName && !options.omitArea) {
+      parts.push(arabic ? `في ${areaName}` : `in ${areaName}`);
+    }
 
     const { bedroomsMin: bedsMin, bedroomsMax: bedsMax } = filters;
     if (bedsMin !== undefined && bedsMin === bedsMax) {

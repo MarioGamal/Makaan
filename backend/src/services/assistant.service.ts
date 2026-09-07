@@ -28,7 +28,10 @@ const ASSISTANT_RESULT_SIZE = 6;
  * the cap has to admit all of them or the widest fallback would be unreachable
  * exactly when it is needed. Each rung stops as soon as something matches.
  */
-const MAX_SEARCH_ATTEMPTS = 10;
+const MAX_SEARCH_ATTEMPTS = 11;
+
+/** How long the governed-area list is reused before being read again. */
+const AREA_CACHE_MS = 60_000;
 
 type Candidate = {
   filters: AssistantFilters;
@@ -43,12 +46,27 @@ export class AssistantService {
     private readonly publicListings: PublicListingService,
   ) {}
 
+  /**
+   * Governed areas change rarely and every message needs the whole list to match
+   * place names, so it is held briefly rather than re-read per question.
+   */
+  private areaCache?: { areas: SearchableArea[]; expiresAt: number };
+
+  private async governedAreas(): Promise<SearchableArea[]> {
+    if (this.areaCache && this.areaCache.expiresAt > Date.now()) {
+      return this.areaCache.areas;
+    }
+    const areas = await this.areaSearch.listSearchable();
+    this.areaCache = { areas, expiresAt: Date.now() + AREA_CACHE_MS };
+    return areas;
+  }
+
   async answer(
     message: string,
     locale: Locale,
     context?: AssistantFilters,
   ): Promise<AssistantMessageResponse> {
-    const areas = await this.areaSearch.listSearchable();
+    const areas = await this.governedAreas();
     const interpretation = await this.provider.interpret({
       message,
       locale,
@@ -61,6 +79,7 @@ export class AssistantService {
         ? this.mergeContext(interpretation.filters, context, {
             reset:
               interpretation.resetContext || interpretation.standaloneRequest,
+            nextPage: interpretation.wantsMore,
           })
         : interpretation.filters;
 
@@ -91,6 +110,19 @@ export class AssistantService {
       relaxations,
       continuedFromContext,
       unsupported: interpretation.unsupported,
+      page: appliedFilters.page ?? 1,
+      // Only meaningful on the first page: on later pages the top card is no
+      // longer the extreme the question asked about.
+      highlight:
+        listings[0] && appliedFilters.sort && (appliedFilters.page ?? 1) === 1
+          ? {
+              priceEgp: listings[0].priceEgp,
+              propertyType: listings[0].propertyType,
+              bedrooms: listings[0].bedrooms,
+              areaAr: listings[0].area.nameAr,
+              areaEn: listings[0].area.nameEn,
+            }
+          : undefined,
       priceRange:
         prices.length > 0
           ? { min: Math.min(...prices), max: Math.max(...prices) }
@@ -130,10 +162,15 @@ export class AssistantService {
   private mergeContext(
     filters: AssistantFilters,
     context: AssistantFilters | undefined,
-    options: { reset: boolean },
+    options: { reset: boolean; nextPage: boolean },
   ): AssistantFilters {
-    if (options.reset || !context) return filters;
+    if (options.reset || !context) {
+      return options.nextPage ? { ...filters, page: 1 } : filters;
+    }
     const merged: AssistantFilters = { ...context, ...filters };
+    // "Show me more" keeps every established filter and advances one page; any
+    // other message restarts at the first page of whatever it now describes.
+    merged.page = options.nextPage ? (context.page ?? 1) + 1 : 1;
     // An area named this turn replaces the previous one outright rather than
     // leaving a stale display name attached to a new identifier.
     if (filters.areaId) {
@@ -245,6 +282,15 @@ export class AssistantService {
       candidates.push({ filters: base, relaxations: notes });
     }
 
+    // A floor can exclude everything just as a ceiling can: "فوق ٢٠ مليون" with
+    // nothing that expensive listed needs the floor dropped, not the area.
+    if (base.priceMin !== undefined) {
+      notes = [...notes, { kind: 'price_floor_dropped', from: base.priceMin }];
+      base = { ...base };
+      delete base.priceMin;
+      candidates.push({ filters: base, relaxations: notes });
+    }
+
     if (base.sizeMin !== undefined) {
       notes = [...notes, { kind: 'size_dropped' }];
       base = { ...base };
@@ -328,7 +374,7 @@ export class AssistantService {
   ): PublicListingQueryDto {
     const query = new PublicListingQueryDto();
     query.locale = locale;
-    query.page = 1;
+    query.page = filters.page ?? 1;
     query.pageSize = ASSISTANT_RESULT_SIZE;
     query.sort = filters.sort ?? 'newest';
     if (filters.purpose) query.purpose = filters.purpose;
