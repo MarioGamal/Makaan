@@ -692,6 +692,93 @@ function latinAreaKey(value: string): string {
     .replace(/\*+/g, '*');
 }
 
+/**
+ * Arabic script writes no short vowels, Latin transliteration writes them all,
+ * so the two only line up on consonants. `مصر الجديدة` and "masr alegdeda" share
+ * `msrgdd`; nothing shorter than that comparison would ever match them.
+ */
+const ARABIC_TO_LATIN: Record<string, string> = {
+  ا: '',
+  أ: '',
+  إ: '',
+  آ: '',
+  و: '',
+  ي: '',
+  ى: '',
+  ع: '',
+  ء: '',
+  ة: '',
+  ب: 'b',
+  ت: 't',
+  ث: 't',
+  ج: 'g',
+  ح: 'h',
+  خ: 'k',
+  د: 'd',
+  ذ: 'd',
+  ر: 'r',
+  ز: 'z',
+  س: 's',
+  ش: 's',
+  ص: 's',
+  ض: 'd',
+  ط: 't',
+  ظ: 'z',
+  غ: 'g',
+  ف: 'f',
+  ق: 'k',
+  ك: 'k',
+  ل: 'l',
+  م: 'm',
+  ن: 'n',
+  ه: 'h',
+};
+
+/** Consonant skeleton of an Arabic place name, with the article dropped. */
+function arabicSkeleton(value: string): string {
+  return (
+    value
+      .split(/\s+/)
+      .map((word) => (word.length > 3 ? word.replace(/^ال/, '') : word))
+      // The feminine ending is silent and transliterations almost never write it:
+      // `القاهرة` is "kahera", not "kaherah".
+      .map((word) => (word.length > 2 ? word.replace(/[هة]$/, '') : word))
+      .join('')
+      .split('')
+      .map((letter) => ARABIC_TO_LATIN[letter] ?? '')
+      .join('')
+      .replace(/([a-z])\1+/g, '$1')
+  );
+}
+
+/** Consonant skeleton of a Latin spelling, so it can be compared with the above. */
+function latinSkeleton(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      // The Arabic article is written attached as often as it is written apart,
+      // so it is dropped either way rather than left to distort the shape.
+      .filter((word) => word !== 'al' && word !== 'el' && word !== 'the')
+      .map((word) => (word.length > 4 ? word.replace(/^(?:al|el)/, '') : word))
+      .join('')
+      .replace(/sh|ch/g, 's')
+      .replace(/kh/g, 'k')
+      .replace(/gh/g, 'g')
+      .replace(/th/g, 't')
+      .replace(/dh/g, 'd')
+      .replace(/ph/g, 'f')
+      .replace(/ck/g, 'k')
+      .replace(/[pb]/g, 'b')
+      .replace(/[qck]/g, 'k')
+      .replace(/j/g, 'g')
+      .replace(/[aeiouwy]/g, '')
+      .replace(/([a-z])\1+/g, '$1')
+  );
+}
+
 /** Edit distance, bounded: anything past the limit stops early. */
 function withinDistance(left: string, right: string, limit: number): boolean {
   if (Math.abs(left.length - right.length) > limit) return false;
@@ -715,21 +802,40 @@ function withinDistance(left: string, right: string, limit: number): boolean {
   return (previous[right.length] as number) <= limit;
 }
 
-/** Every Latin shape an area may be written as, including its distinctive words. */
-function latinAreaKeys(area: AssistantAreaOption): string[] {
-  const sources = [area.nameEn, ...area.aliases];
-  const keys = new Set<string>();
-  for (const source of sources) {
-    if (!/[a-z]/i.test(source)) continue;
-    const whole = latinAreaKey(source);
-    if (whole.length >= 4) keys.add(whole);
-    for (const word of source.toLowerCase().split(/\s+/)) {
-      if (LATIN_AREA_STOPWORDS.has(word.replace(/[^a-z]/g, ''))) continue;
-      const key = latinAreaKey(word);
-      if (key.length >= 4) keys.add(key);
+/**
+ * Every shape an area may be written as.
+ *
+ * Two kinds: a vowel-masked key from its Latin spellings, which keeps positional
+ * structure for short names, and a consonant skeleton derived from the Arabic
+ * name as well, which is the only thing a transliteration such as
+ * "masr alegdeda" can be compared against.
+ */
+function latinAreaKeys(
+  area: AssistantAreaOption,
+): Array<{ key: string; kind: 'masked' | 'skeleton' }> {
+  const keys = new Map<string, 'masked' | 'skeleton'>();
+  const add = (key: string, kind: 'masked' | 'skeleton', minimum: number) => {
+    if (key.length >= minimum && !keys.has(key)) keys.set(key, kind);
+  };
+
+  for (const source of [area.nameEn, ...area.aliases]) {
+    if (/[a-z]/i.test(source)) {
+      add(latinAreaKey(source), 'masked', 4);
+      add(latinSkeleton(source), 'skeleton', 4);
+      for (const word of source.toLowerCase().split(/\s+/)) {
+        if (LATIN_AREA_STOPWORDS.has(word.replace(/[^a-z]/g, ''))) continue;
+        add(latinAreaKey(word), 'masked', 4);
+        add(latinSkeleton(word), 'skeleton', 4);
+      }
     }
+    if (/[؀-ۿ]/.test(source)) add(arabicSkeleton(source), 'skeleton', 4);
   }
-  return [...keys];
+  add(arabicSkeleton(area.nameAr), 'skeleton', 4);
+  for (const word of area.nameAr.split(/\s+/)) {
+    add(arabicSkeleton(word), 'skeleton', 4);
+  }
+
+  return [...keys].map(([key, kind]) => ({ key, kind }));
 }
 
 /**
@@ -754,12 +860,17 @@ function matchAreaByShape(
     }
   }
 
+  const shapes = candidates.map((candidate) => ({
+    masked: latinAreaKey(candidate),
+    skeleton: latinSkeleton(candidate),
+  }));
+
   let best: { area: AssistantAreaOption; score: number } | undefined;
   for (const area of areas) {
-    for (const key of latinAreaKeys(area)) {
+    for (const { key, kind } of latinAreaKeys(area)) {
       const limit = key.length >= 6 ? 1 : 0;
-      for (const candidate of candidates) {
-        const candidateKey = latinAreaKey(candidate);
+      for (const shape of shapes) {
+        const candidateKey = kind === 'masked' ? shape.masked : shape.skeleton;
         if (candidateKey.length < 4) continue;
         if (!withinDistance(candidateKey, key, limit)) continue;
         const score =
