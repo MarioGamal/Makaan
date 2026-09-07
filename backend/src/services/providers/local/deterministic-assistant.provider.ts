@@ -210,7 +210,10 @@ export class DeterministicAssistantProvider implements AssistantProvider {
       });
     }
 
-    if (signalCount > 0) {
+    // "What is the average price?" states no facet, but it is a question about
+    // the listings and deserves the catalogue plus the note explaining that an
+    // average is not something this search can compute — not the generic help.
+    if (signalCount > 0 || unsupported.includes('aggregate')) {
       return Promise.resolve({
         intent: 'search' as AssistantIntent,
         filters,
@@ -698,15 +701,22 @@ export class DeterministicAssistantProvider implements AssistantProvider {
     }
 
     if (filters.participation?.length) {
-      const ownersOnly = !filters.participation.includes('declared_agent');
+      const labels = filters.participation;
+      const verifiedOnly =
+        labels.length === 1 && labels[0] === 'verified_owner';
+      const ownersOnly = !labels.includes('declared_agent');
       parts.push(
-        ownersOnly
+        verifiedOnly
           ? arabic
-            ? 'من الملاك بس'
-            : 'from owners only'
-          : arabic
-            ? 'من وسطاء معلنين'
-            : 'from declared agents',
+            ? 'من الملاك المتحقق منهم بس'
+            : 'from verified owners only'
+          : ownersOnly
+            ? arabic
+              ? 'من الملاك بس'
+              : 'from owners only'
+            : arabic
+              ? 'من وسطاء معلنين'
+              : 'from declared agents',
       );
     }
 

@@ -102,6 +102,53 @@ export function normalizeText(value: string): string {
   );
 }
 
+/**
+ * Latin words carrying the digits Egyptians substitute for Arabic letters —
+ * `3ayez`, `sha2a`, `7aga`. Two letters are required beside the digit so units
+ * such as `m2` and figures such as `150m2` are not mistaken for it.
+ */
+const FRANCO_DIGIT_WORD =
+  /\b(?:[a-z]{0,}[23578][a-z]{2,}|[a-z]{2,}[23578][a-z]{0,})\b/;
+
+/**
+ * Picks the language to answer in from the question itself, so a visitor writing
+ * English gets English even while the interface is in Arabic, and the reverse.
+ *
+ * The count runs on normalized text, which means Latin-script Arabic has already
+ * been folded to Arabic and counts as Arabic — someone typing "3ayez sha2a" is
+ * speaking Arabic. A mixed message follows its majority; a message with no
+ * letters at all, or an exact tie, keeps whatever the interface is set to.
+ */
+export function detectLocale(
+  rawMessage: string,
+  fallback: 'ar' | 'en',
+): 'ar' | 'en' {
+  if (FRANCO_DIGIT_WORD.test(rawMessage.toLowerCase())) return 'ar';
+
+  // Counted by word rather than by letter. English words are longer, so letters
+  // would call "عايز 3 bedroom apartment في المعادي" English when three of its
+  // five words — and its whole sentence shape — are Arabic.
+  let arabic = 0;
+  let latin = 0;
+  let opened: 'ar' | 'en' | undefined;
+  for (const word of normalizeText(rawMessage).split(' ')) {
+    const arabicLetters = (word.match(/[؀-ۿ]/g) ?? []).length;
+    const latinLetters = (word.match(/[a-z]/g) ?? []).length;
+    if (arabicLetters > latinLetters) {
+      arabic += 1;
+      opened ??= 'ar';
+    } else if (latinLetters > arabicLetters) {
+      latin += 1;
+      opened ??= 'en';
+    }
+  }
+  if (arabic !== latin) return arabic > latin ? 'ar' : 'en';
+  // An even split is decided by the language the sentence opens in, which is the
+  // one the visitor was thinking in. With no letters at all — "12345", "؟" — there
+  // is nothing to read, so the interface setting stands.
+  return opened ?? fallback;
+}
+
 const WORD_NUMBERS: Record<string, number> = {
   واحد: 1,
   واحده: 1,
@@ -184,14 +231,14 @@ const AGENT_PATTERN = new RegExp(
   `${arabicWord('وسيط|وسطاء|سمسار|سماسره|بروكر')}|\\b(?:agent|agents|broker|brokers)\\b`,
 );
 const NEGATION_CUE =
-  /(?:من غير|بدون|مش|ما ?عايز|ما ?عاوز|لا اريد|no|not|without|skip)\s*$/;
+  /(?:من غير|بدون|مش|ما ?عايز|ما ?عاوز|لا اريد|\bno\b|\bnot\b|without|except|skip)/;
 
 // "شقة رخيصة" is not a superlative but it does say which end of the range to
 // start from, so it sorts the same way "الأرخص" does.
 const CHEAPEST_PATTERN =
   /(?:ارخص|اقل سعر|اقل الاسعار|رخيص|رخيصه|في المتناول|cheapest|lowest price|cheap|affordable|budget friendly)/;
 const PRICIEST_PATTERN =
-  /(?:اغلي|اعلي سعر|اكبر سعر|most expensive|highest price)/;
+  /(?:اغلي|اعلي سعر|اكبر سعر|most expensive|highest price|priciest|dearest|most costly|top price)/;
 // `الجديد` alone is omitted on purpose: it also appears inside area names such as
 // `القاهرة الجديدة`, where it says nothing about sorting.
 const NEWEST_PATTERN = /(?:احدث|اجدد|اخر الاعلانات|newest|latest)/;
@@ -331,13 +378,25 @@ function extractBedrooms(
 
   // The marker has to follow the count closely; further away it is usually the
   // ordinary Egyptian "بس" meaning "but" rather than "only".
-  const nounEnd = new RegExp(`(?:${BEDROOM_NOUNS})`, 'g');
+  // English puts the marker before the count ("exactly 2 bedrooms") and Arabic
+  // after it ("غرفتين بس"), so both sides are examined. The window before is kept
+  // short so an "only" belonging to another clause is not picked up.
+  // The number is optional: Arabic dual forms such as `غرفتين` carry the count in
+  // the word itself, and requiring a digit would miss "غرفتين بس" entirely.
+  const counted = new RegExp(
+    `(?:(?:\\d+|${WORD_NUMBER_PATTERN})\\s*)?(?:${BEDROOM_NOUNS})`,
+    'g',
+  );
   let exact = false;
-  for (const match of text.matchAll(nounEnd)) {
-    const after = text.slice(match.index + match[0].length);
+  for (const match of text.matchAll(counted)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const before = text.slice(Math.max(0, start - 16), start);
+    const after = text.slice(end);
     if (
       EXACT_COUNT_IMMEDIATE.test(after) ||
-      EXACT_COUNT_NEARBY.test(after.slice(0, 28))
+      EXACT_COUNT_NEARBY.test(after.slice(0, 28)) ||
+      EXACT_COUNT_NEARBY.test(before)
     ) {
       exact = true;
     }
@@ -365,7 +424,10 @@ function extractAmounts(
   const pattern = new RegExp(
     [
       `(?:(${quantity})\\s*)?(?:(نص)\\s*)?(مليونين|مليون|ملايين|الفين|الف|الاف)(?![\\u0600-\\u06FF])`,
-      `(?:(${quantity})\\s*)(?:(نص)\\s*)?\\b(million|millions|thousand|thousands|k|m)\\b`,
+      // The scale may be written against the number — "3m", "500k" — so a word
+      // boundary before it is wrong; what matters is that nothing follows it, or
+      // "180 m2" would read as 180 million.
+      `(?:(${quantity})\\s*)(?:(نص)\\s*)?(million|millions|thousand|thousands|k|m)(?![a-z0-9])`,
       `(\\d{3,}(?:\\.\\d+)?)`,
     ].join('|'),
     'g',
@@ -408,6 +470,32 @@ function extractAmounts(
   }
 
   return amounts;
+}
+
+/**
+ * "between 2 and 4 million" — a range where only the second figure carries the
+ * scale, so the first has to borrow it. Written out in full on both sides
+ * ("من ٥ مليون لـ ٨ مليون") the ordinary two-amount path already handles it.
+ */
+function extractSharedScaleRange(
+  text: string,
+  consumed: Consumed,
+): { priceMin: number; priceMax: number } | undefined {
+  const quantity = `(?:\\d+(?:\\.\\d+)?|${WORD_NUMBER_PATTERN})`;
+  const pattern = new RegExp(
+    `(?:between|from|من)?\\s*(${quantity})\\s*(?:to|and|و|الي|لـ|ل|-)\\s*(${quantity})\\s*(مليون|ملايين|الف|الاف|million|millions|thousand|thousands|k|m)(?![a-z0-9])`,
+  );
+  const match = pattern.exec(text);
+  if (!match) return undefined;
+  const low = numberFrom(match[1] as string);
+  const high = numberFrom(match[2] as string);
+  const scale = match[3] as string;
+  if (low === undefined || high === undefined || low > high) return undefined;
+  const multiplier = /^(?:مليون|ملايين|million|millions|m)$/.test(scale)
+    ? 1_000_000
+    : 1_000;
+  consumed.claim(match.index, match.index + match[0].length);
+  return { priceMin: low * multiplier, priceMax: high * multiplier };
 }
 
 function resolvePrices(
@@ -561,8 +649,9 @@ export function extractFacets(
     signalCount += 1;
   }
 
+  const sharedRange = extractSharedScaleRange(text, consumed);
   const amounts = extractAmounts(text, consumed, rent);
-  const prices = resolvePrices(text, amounts);
+  const prices = sharedRange ?? resolvePrices(text, amounts);
   if (prices.priceMin !== undefined) {
     filters.priceMin = prices.priceMin;
     signalCount += 1;
@@ -654,14 +743,16 @@ function matchParticipation(text: string): ParticipationLabel[] | undefined {
   const ownerCue = OWNER_ONLY_PATTERN.test(text);
 
   if (agentMatch) {
+    // The cue is looked for anywhere in the short run before the word, because
+    // English inserts articles and prepositions — "not from an agent" — that an
+    // anchored test would never see past.
     const before = text.slice(
-      Math.max(0, agentMatch.index - 20),
+      Math.max(0, agentMatch.index - 22),
       agentMatch.index,
     );
-    const negated = NEGATION_CUE.test(
-      before.replace(/\s*(?:من|the|a)\s*$/, ' '),
-    );
-    if (negated || ownerCue) return ['verified_owner', 'owner_not_verified'];
+    if (NEGATION_CUE.test(before) || ownerCue) {
+      return ['verified_owner', 'owner_not_verified'];
+    }
     return ['declared_agent'];
   }
 

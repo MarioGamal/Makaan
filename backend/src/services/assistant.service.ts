@@ -15,6 +15,7 @@ import { PublicListingQueryDto } from '../api/listings/dto/public-listing-query.
 
 import { AreaSearchService, type SearchableArea } from './area-search.service';
 import type { AssistantProvider } from './providers/assistant.provider';
+import { detectLocale } from './providers/local/assistant-language';
 import { ASSISTANT_PROVIDER } from './providers/providers.module';
 import { PublicListingService } from './public-listing.service';
 
@@ -67,9 +68,12 @@ export class AssistantService {
     context?: AssistantFilters,
   ): Promise<AssistantMessageResponse> {
     const areas = await this.governedAreas();
+    // The question decides the language of the answer, not the interface: an
+    // English question typed on the Arabic site is still an English question.
+    const replyLocale = detectLocale(message, locale);
     const interpretation = await this.provider.interpret({
       message,
-      locale,
+      locale: replyLocale,
       context,
       areas,
     });
@@ -89,7 +93,7 @@ export class AssistantService {
     let appliedFilters = filters;
 
     if (interpretation.intent === 'search') {
-      const outcome = await this.searchWithWidening(filters, locale);
+      const outcome = await this.searchWithWidening(filters, replyLocale);
       listings = outcome.listings;
       totalMatches = outcome.total;
       relaxations = outcome.relaxations;
@@ -101,7 +105,7 @@ export class AssistantService {
       interpretation.intent === 'search' &&
       this.inheritedFrom(interpretation.filters, appliedFilters);
     const composition = await this.provider.compose({
-      locale,
+      locale: replyLocale,
       intent: interpretation.intent,
       filters: appliedFilters,
       topics: interpretation.topics,
@@ -135,7 +139,7 @@ export class AssistantService {
 
     return {
       messageId: randomUUID(),
-      locale,
+      locale: replyLocale,
       intent: interpretation.intent,
       reply: composition.reply,
       generated: true,

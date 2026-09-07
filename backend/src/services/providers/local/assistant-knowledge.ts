@@ -241,8 +241,8 @@ export const KNOWLEDGE_TOPICS: ReadonlyArray<KnowledgeTopic> = [
       'switch language',
     ],
     answer: {
-      ar: 'الموقع شغال بالعربي والإنجليزي بالكامل. تقدر تبدّل اللغة من زرار اللغة في أعلى الصفحة، وأنا هرد عليك بنفس اللغة اللي مختارها.',
-      en: 'The site is fully available in Arabic and English. You can switch from the language control in the header, and I will reply in whichever language you have selected.',
+      ar: 'الموقع شغال بالعربي والإنجليزي بالكامل، وتقدر تبدّل لغته من زرار اللغة في أعلى الصفحة. وأنا برد بلغة سؤالك نفسه: اكتبلي عربي هرد عربي، واكتبلي إنجليزي هرد إنجليزي، حتى لو إعداد الموقع على اللغة التانية.',
+      en: 'The site is fully available in Arabic and English, and you can switch it from the language control in the header. I reply in the language of your question itself: write to me in English and you get English, write in Arabic and you get Arabic, whichever language the interface is set to.',
     },
   },
   {

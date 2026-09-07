@@ -140,6 +140,11 @@ Uses the anonymous subject cookie and anonymous CSRF token, and is rate limited 
 browsing. `message` is capped at 500 characters. `context` echoes `filters` from the previous reply so
 follow-up questions keep the established purpose, area, and budget.
 
+`locale` in the request is the interface language; the reply follows the language of the message
+itself and is reported back in `locale`. A mixed message follows its majority by word count, an even
+split follows the language it opens in, and Latin-script Arabic — "3ayez sha2a" — counts as Arabic. A
+message with no letters at all keeps the interface language.
+
 Context is carried into refinements only. A message that states what the visitor wants — a request verb
 or a named property type — starts from what it says, because inheriting an area or a budget into it
 would answer a narrower question than the one asked. `filters.page` rides along so "show me more"
