@@ -18,6 +18,7 @@ export type ListingSearchParams = {
   sizeMin?: number;
   sizeMax?: number;
   bedroomsMin?: number;
+  bedroomsMax?: number;
   participation?: 'verified_owner' | 'owner_not_verified' | 'declared_agent';
   sort?: PublicSort;
   page?: number;

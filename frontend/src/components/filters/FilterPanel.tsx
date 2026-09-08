@@ -25,7 +25,13 @@ export function FilterPanel({
   onClear: () => void;
 }) {
   const numeric = (
-    key: 'priceMin' | 'priceMax' | 'sizeMin' | 'sizeMax' | 'bedroomsMin',
+    key:
+      | 'priceMin'
+      | 'priceMax'
+      | 'sizeMin'
+      | 'sizeMax'
+      | 'bedroomsMin'
+      | 'bedroomsMax',
     value: string,
   ) => onChange({ ...filters, [key]: value ? Number(value) : undefined });
   const activeFilters = Object.entries(filters).filter(
@@ -104,12 +110,20 @@ export function FilterPanel({
         value={filters.sizeMax ?? ''}
       />
       <Input
-        aria-label={copy.bedrooms}
+        aria-label={copy.minBedrooms}
         min={0}
         onChange={(event) => numeric('bedroomsMin', event.target.value)}
-        placeholder={copy.bedrooms}
+        placeholder={copy.minBedrooms}
         type="number"
         value={filters.bedroomsMin ?? ''}
+      />
+      <Input
+        aria-label={copy.maxBedrooms}
+        min={0}
+        onChange={(event) => numeric('bedroomsMax', event.target.value)}
+        placeholder={copy.maxBedrooms}
+        type="number"
+        value={filters.bedroomsMax ?? ''}
       />
       <Select
         aria-label={copy.participation}

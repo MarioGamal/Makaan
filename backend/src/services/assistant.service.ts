@@ -29,7 +29,7 @@ const ASSISTANT_RESULT_SIZE = 6;
  * the cap has to admit all of them or the widest fallback would be unreachable
  * exactly when it is needed. Each rung stops as soon as something matches.
  */
-const MAX_SEARCH_ATTEMPTS = 11;
+const MAX_SEARCH_ATTEMPTS = 12;
 
 /** How long the governed-area list is reused before being read again. */
 const AREA_CACHE_MS = 60_000;
@@ -295,10 +295,11 @@ export class AssistantService {
       candidates.push({ filters: base, relaxations: notes });
     }
 
-    if (base.sizeMin !== undefined) {
+    if (base.sizeMin !== undefined || base.sizeMax !== undefined) {
       notes = [...notes, { kind: 'size_dropped' }];
       base = { ...base };
       delete base.sizeMin;
+      delete base.sizeMax;
       candidates.push({ filters: base, relaxations: notes });
     }
 
@@ -414,6 +415,9 @@ export class AssistantService {
     }
     if (filters.sizeMin !== undefined) {
       params.set('sizeMin', String(filters.sizeMin));
+    }
+    if (filters.sizeMax !== undefined) {
+      params.set('sizeMax', String(filters.sizeMax));
     }
     if (filters.bedroomsMin !== undefined) {
       params.set('bedroomsMin', String(filters.bedroomsMin));

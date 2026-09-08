@@ -43,6 +43,7 @@ function queryToParams(
     sizeMin: number(query.sizeMin),
     sizeMax: number(query.sizeMax),
     bedroomsMin: number(query.bedroomsMin),
+    bedroomsMax: number(query.bedroomsMax),
     participation: [
       'verified_owner',
       'owner_not_verified',
@@ -94,6 +95,7 @@ export function MarketplaceBrowser() {
     sizeMin: params.sizeMin,
     sizeMax: params.sizeMax,
     bedroomsMin: params.bedroomsMin,
+    bedroomsMax: params.bedroomsMax,
     participation: params.participation,
     sort: params.sort,
   };
