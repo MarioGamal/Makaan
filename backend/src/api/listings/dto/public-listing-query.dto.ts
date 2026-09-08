@@ -68,6 +68,14 @@ export class PublicListingQueryDto {
   @Max(20)
   bedroomsMin?: number;
 
+  /** Upper bound so "two bedrooms only" is expressible, not just "two or more". */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(20)
+  bedroomsMax?: number;
+
   @IsOptional()
   @Transform(toArray)
   @IsArray()

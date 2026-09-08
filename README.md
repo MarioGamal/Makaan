@@ -11,6 +11,8 @@ The application includes:
 - Owner and declared-agent participation labels
 - Moderator sign-in with TOTP, private review data, approval, rejection, and unpublishing
 - Exact-location protection with only area-level or reviewed approximate locations exposed publicly
+- An Arabic/English assistant that answers listing and site questions from the public search
+  projection, widens a search that returns nothing, and runs with no account or model key
 - PostgreSQL/PostGIS persistence, Redis sessions and abuse controls, and pluggable media/maps providers
 
 Live demo: <https://makaan-zeta.vercel.app>

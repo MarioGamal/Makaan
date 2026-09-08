@@ -4,6 +4,7 @@ import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 import { AdminModule } from './api/admin/admin.module';
+import { AssistantModule } from './api/assistant/assistant.module';
 import { AuthModule } from './api/auth/auth.module';
 import { BuyerModule } from './api/buyer/buyer.module';
 import { HealthModule } from './api/health/health.module';
@@ -29,6 +30,7 @@ import { ProvidersModule } from './services/providers';
       validate: validateEnvironment,
     }),
     AdminModule,
+    AssistantModule,
     AuthModule,
     BuyerModule,
     HealthModule,

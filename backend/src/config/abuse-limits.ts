@@ -36,6 +36,13 @@ export const ABUSE_LIMITS = {
     limit: 10,
     windowSeconds: 60 * 60,
   },
+  // The assistant runs several searches per question, so it is capped tighter
+  // than plain browsing while still allowing a normal back-and-forth.
+  assistantMessage: {
+    environmentName: 'ABUSE_ASSISTANT_MESSAGE_LIMIT',
+    limit: 30,
+    windowSeconds: 10 * 60,
+  },
 } as const;
 
 export type AbuseLimitName = keyof typeof ABUSE_LIMITS;

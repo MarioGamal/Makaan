@@ -72,7 +72,9 @@ type AreaSearchResponse = { items: PublicArea[] };
 `GET /listings`
 
 Supported query fields: `locale`, `purpose`, repeated `areaId`, repeated `propertyType`, `priceMin`,
-`priceMax`, `sizeMin`, `sizeMax`, `bedroomsMin`, `participation`, `bbox`, `sort`, `page`, and `pageSize`.
+`priceMax`, `sizeMin`, `sizeMax`, `bedroomsMin`, `bedroomsMax`, `participation`, `bbox`, `sort`, `page`,
+and `pageSize`. `bedroomsMax` bounds the count from above so an exact requirement such as "two bedrooms
+only" is expressible rather than being widened to "two or more".
 `purpose` is `sale|long_term_rent`; `participation` is
 `verified_owner|owner_not_verified|declared_agent`. A bbox is `west,south,east,north`, is bounded to Cairo,
 and filters approved approximate points only. Area-only listings remain in the area-filter result set but
@@ -128,6 +130,87 @@ session/storage keys, scan metadata, or internal scores.
 - `GET /contact-intents/:token/resolve` consumes the scoped single-use intent and responds with a short
   native redirect. Expired, reused, principal-mismatched, rejected, or ineligible intents never reveal the
   destination and do not increment accepted contact metrics.
+
+## Assistant
+
+`POST /assistant/messages` with `{ message: string; locale?: 'ar'|'en'; context?: AssistantFilters }`
+→ `200 AssistantMessageResponse`
+
+Uses the anonymous subject cookie and anonymous CSRF token, and is rate limited separately from
+browsing. `message` is capped at 500 characters. `context` echoes `filters` from the previous reply so
+follow-up questions keep the established purpose, area, and budget.
+
+`locale` in the request is the interface language; the reply follows the language of the message
+itself and is reported back in `locale`. A mixed message follows its majority by word count, an even
+split follows the language it opens in, and Latin-script Arabic — "3ayez sha2a" — counts as Arabic. A
+message with no letters at all keeps the interface language.
+
+Context is carried into refinements only. A message that states what the visitor wants — a request verb
+or a named property type — starts from what it says, because inheriting an area or a budget into it
+would answer a narrower question than the one asked. `filters.page` rides along so "show me more"
+advances through the same result set; any other message returns to page 1.
+
+```ts
+type AssistantIntent = 'search' | 'faq' | 'greeting' | 'help' | 'privacy_boundary' | 'out_of_scope';
+
+type AssistantRelaxation =
+  | { kind: 'price_ceiling_raised'; from: number; to: number }
+  | { kind: 'price_ceiling_dropped'; from: number }
+  | { kind: 'price_floor_dropped'; from: number }
+  | { kind: 'bedrooms_lowered'; from: number; to: number }
+  | { kind: 'bedrooms_ceiling_dropped'; from: number }
+  | { kind: 'bedrooms_dropped'; from: number }
+  | { kind: 'property_type_dropped'; from: string }
+  | { kind: 'participation_dropped' }
+  | { kind: 'size_dropped' }
+  | { kind: 'area_dropped'; from: string };
+
+type AssistantMessageResponse = {
+  messageId: string;
+  locale: 'ar' | 'en';
+  intent: AssistantIntent;
+  reply: string;
+  generated: true;
+  provider: string;
+  listings: PublicListingCard[];
+  totalMatches: number;
+  filters: AssistantFilters;
+  relaxations: AssistantRelaxation[];
+  unsupported: UnsupportedConstraint[];
+  browseQuery: string;
+  suggestions: string[];
+  topics: string[];
+};
+
+type UnsupportedConstraint =
+  | 'finishing'
+  | 'floor'
+  | 'bathrooms'
+  | 'furnished'
+  | 'parking'
+  | 'elevator'
+  | 'outdoor_space'
+  | 'compound'
+  | 'nearby'
+  | 'payment_terms'
+  | 'aggregate'
+  | 'area_comparison';
+```
+
+Assistant invariants:
+
+1. `listings` is produced by the same public search projection as `GET /listings`. The assistant has no
+   other read path, so exact locations, seller contacts, and moderation data cannot reach a reply.
+2. `AssistantFilters` mirrors the public search filters exactly; a question can never widen what is
+   readable beyond what a visitor could select by hand.
+3. `generated` is always `true` and interfaces must label the reply as machine generated.
+4. When a search returns nothing, constraints are loosened one at a time and every loosened constraint
+   is reported in `relaxations`. `purpose` is never relaxed.
+5. A request for an exact address or a seller's contact returns `intent: 'privacy_boundary'` and no
+   listings.
+6. A constraint the question states that public search cannot express — a finishing level, a floor, a
+   garage, an average — is reported in `unsupported` and named in `reply`. It is never dropped
+   silently, because results presented without it would describe a search that did not happen.
 
 ## Seller
 
