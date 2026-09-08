@@ -49,7 +49,7 @@ export function Drawer({
     <div className="fixed inset-0 z-50" role="presentation">
       <button
         aria-label={closeLabel}
-        className="absolute inset-0 h-full w-full cursor-default bg-ink/45"
+        className="absolute inset-0 h-full w-full cursor-default bg-scrim/55 backdrop-blur-sm"
         onClick={onClose}
         tabIndex={-1}
         type="button"

@@ -1,6 +1,7 @@
-import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'danger';
+type ButtonVariant =
+  'primary' | 'secondary' | 'quiet' | 'ghost' | 'danger' | 'glass';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -8,20 +9,35 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: ButtonSize;
   fullWidth?: boolean;
   loading?: boolean;
+  /** Decorative glyph before the label; the label carries the meaning. */
+  icon?: ReactNode;
+  iconEnd?: ReactNode;
+  /** Square control sized for an icon alone. Needs an accessible name. */
+  iconOnly?: boolean;
 };
 
 const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-white hover:bg-primary-strong',
+  primary:
+    'bg-primary text-white shadow-ui hover:bg-primary-strong hover:shadow-panel',
   secondary:
-    'border border-border bg-surface-raised text-ink hover:bg-surface-muted',
+    'border border-border bg-surface-raised text-ink shadow-xs hover:border-border-strong hover:bg-surface-muted',
   quiet: 'text-primary hover:bg-primary-soft',
-  danger: 'bg-danger text-white hover:opacity-90',
+  ghost: 'text-ink-muted hover:bg-surface-muted hover:text-ink',
+  danger: 'bg-danger text-white shadow-ui hover:opacity-90',
+  // Sits on photography or a scrolled header, and borrows the colour behind it.
+  glass: 'glass text-ink shadow-ui hover:bg-surface-raised',
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: 'min-h-11 px-3 text-sm',
-  md: 'min-h-11 px-4 text-sm',
-  lg: 'min-h-12 px-5 text-base',
+  sm: 'min-h-tap px-3.5 text-sm',
+  md: 'min-h-tap px-5 text-sm',
+  lg: 'min-h-12 px-7 text-base',
+};
+
+const iconSizes: Record<ButtonSize, string> = {
+  sm: 'min-h-tap w-tap px-0',
+  md: 'min-h-tap w-tap px-0',
+  lg: 'min-h-12 w-12 px-0',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -32,6 +48,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       size = 'md',
       fullWidth = false,
       loading = false,
+      icon,
+      iconEnd,
+      iconOnly = false,
       disabled,
       children,
       type = 'button',
@@ -44,17 +63,24 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
         ref={ref}
         aria-busy={loading || undefined}
-        className={`inline-flex items-center justify-center gap-2 rounded-ui font-semibold shadow-ui transition-colors focus-visible:relative disabled:cursor-not-allowed disabled:opacity-55 ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+        className={`group/button inline-flex select-none items-center justify-center gap-2 rounded-pill font-semibold transition-[background-color,border-color,box-shadow,transform,opacity] duration-200 ease-soft active:translate-y-px disabled:pointer-events-none disabled:opacity-50 ${
+          variants[variant]
+        } ${iconOnly ? iconSizes[size] : sizes[size]} ${
+          fullWidth ? 'w-full' : ''
+        } ${className}`}
         disabled={disabled || loading}
         type={type}
       >
         {loading ? (
           <span
             aria-hidden="true"
-            className="size-4 animate-spin rounded-full border-2 border-current border-e-transparent"
+            className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-e-transparent"
           />
-        ) : null}
+        ) : (
+          icon
+        )}
         {children}
+        {iconEnd}
       </button>
     );
   },

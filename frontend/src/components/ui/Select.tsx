@@ -1,5 +1,7 @@
 import { forwardRef, useId, type SelectHTMLAttributes } from 'react';
 
+import { ChevronIcon } from './icons';
+
 export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   label?: string;
   hint?: string;
@@ -47,27 +49,19 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               [hintId, errorId].filter(Boolean).join(' ') || undefined
             }
             aria-invalid={Boolean(error) || undefined}
-            className={`min-h-12 w-full appearance-none rounded-xl border bg-surface-raised py-2 ps-4 pe-12 text-ink shadow-ui transition hover:border-primary/45 focus-visible:border-primary ${error ? 'border-danger' : 'border-border'} ${className}`}
+            className={`min-h-tap w-full appearance-none rounded-ui border bg-surface-raised py-2 ps-3.5 pe-11 text-ink transition-colors duration-200 focus-visible:border-primary ${
+              error
+                ? 'border-danger'
+                : 'border-border hover:border-border-strong'
+            } ${className}`}
           >
             {children}
           </select>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-1 end-1 grid w-10 place-items-center rounded-lg bg-surface-muted text-primary"
+            className="pointer-events-none absolute inset-y-1.5 end-1.5 grid w-8 place-items-center rounded-xs text-ink-subtle"
           >
-            <svg
-              className="size-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="m7 10 5 5 5-5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <ChevronIcon className="size-4" />
           </span>
         </div>
         {hint ? (
