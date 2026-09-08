@@ -287,12 +287,17 @@ dense result set cover each other and the map beneath them.
 Both only occur on the Mapbox view, which needs a token and is not the default
 local configuration; the schematic fallback is clean.
 
-- Mapbox's own attribution control renders `role="list"` around non-list
-  children, which axe reports as `aria-required-children`. It is third-party
-  markup and removing the role would strip the attribution requirement.
-- Overlapping price pins can leave less than 24 px unobstructed, which axe
-  reports as `target-size`. Clustering — `supercluster` is already a
-  dependency — is the real fix and is not in this change.
+Both come from Mapbox's own attribution control, which is third-party markup
+that may not be altered — the attribution is a licensing requirement:
+
+- it renders `role="list"` around non-list children, reported as
+  `aria-required-children`;
+- its `© Mapbox` link is smaller than 24 px, reported as `target-size`.
+
+Everything the application itself renders on that view passes. Overlapping
+price pins remain a usability limit rather than an axe finding: clustering —
+`supercluster` is already a dependency — is the real fix and is not in this
+change.
 
 ## 6. Testing
 

@@ -1,22 +1,27 @@
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useRouter } from 'next/router';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { PublicListingSearchResponse } from '@makaan/shared/types/marketplace';
 
 import { HeroSection } from '../components/home/HeroSection';
 import { useLocale } from '../components/layout/LocaleProvider';
 import { PublicListingCard } from '../components/listing/PublicListingCard';
-import { AsyncState, Card, ScrollReveal } from '../components/ui';
+import { SchematicMap } from '../components/map/SchematicMap';
+import { AsyncState, Badge, Button, Card, ScrollReveal } from '../components/ui';
 import {
   ArrowIcon,
+  CloseIcon,
+  MapIcon,
   PinIcon,
   ShieldIcon,
   SparkIcon,
 } from '../components/ui/icons';
 import { useListings } from '../hooks/useListings';
-import { catalogues, translate } from '../i18n';
+import { catalogues, formatNumber, translate } from '../i18n';
 import { searchListings } from '../services/listings.service';
 import { localeFromCookie } from '../utils/locale';
 
@@ -25,8 +30,92 @@ const FEATURED_COUNT = 6;
 type HomePageProps = { featured: PublicListingSearchResponse | null };
 
 export default function HomePage({ featured }: HomePageProps) {
+  const router = useRouter();
   const { locale } = useLocale();
   const copy = catalogues[locale].marketplace;
+
+  /*
+   * Explore-on-map: a full-screen dialog rather than a section, so the map
+   * gets the whole viewport without pushing the landing content around.
+   */
+  const [selectedMapId, setSelectedMapId] = useState<string>();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMapKey, setModalMapKey] = useState(0);
+  const [mapResetTrigger, setMapResetTrigger] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const mapDialogTitleId = useId();
+  const mapDialogRef = useRef<HTMLDivElement>(null);
+  const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const mapWasOpenRef = useRef(false);
+
+  const closeMapModal = useCallback(() => {
+    setIsModalOpen(false);
+    setSelectedMapId(undefined);
+    setModalMapKey((previous) => previous + 1);
+    setMapResetTrigger((previous) => previous + 1);
+  }, []);
+
+  // The portal only exists after mount; rendering it on the server would not
+  // find document.body.
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    const onRouteChange = () => closeMapModal();
+    router.events?.on('routeChangeStart', onRouteChange);
+    return () => router.events?.off('routeChangeStart', onRouteChange);
+  }, [closeMapModal, router.events]);
+
+  // A dialog owns the keyboard while it is open: Escape closes it and Tab
+  // cycles inside it.
+  useEffect(() => {
+    if (!isModalOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMapModal();
+        return;
+      }
+      if (event.key !== 'Tab' || !mapDialogRef.current) return;
+      const focusable = Array.from(
+        mapDialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => mapDialogRef.current?.focus());
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [closeMapModal, isModalOpen]);
+
+  // Closing returns focus to the control that opened it.
+  useEffect(() => {
+    if (mapWasOpenRef.current && !isModalOpen) {
+      requestAnimationFrame(() => mapTriggerRef.current?.focus());
+    }
+    mapWasOpenRef.current = isModalOpen;
+  }, [isModalOpen]);
+
+  /** Only fetched once the dialog is open — a closed map costs nothing. */
+  const mapListings = useListings(
+    isModalOpen ? { locale, page: 1, pageSize: 40, sort: 'newest' } : null,
+  );
+  const pinnedCount = mapListings.listings.filter(
+    (listing) => listing.publicLocation.mode === 'approximate',
+  ).length;
 
   /*
    * The server already rendered these cards. Seeding SWR with that same
@@ -205,6 +294,113 @@ export default function HomePage({ featured }: HomePageProps) {
             </ScrollReveal>
           </section>
         </div>
+
+        {/*
+          The map opens over the page rather than inside it, so it gets the
+          whole viewport instead of competing with the landing content.
+        */}
+        {mounted && isModalOpen
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/55 p-3 backdrop-blur-sm"
+                onClick={closeMapModal}
+              >
+                <div
+                  aria-labelledby={mapDialogTitleId}
+                  aria-modal="true"
+                  className="relative flex h-[90vh] w-[95vw] max-w-6xl flex-col overflow-hidden rounded-card border border-border bg-surface shadow-float md:h-[85vh]"
+                  onClick={(event) => event.stopPropagation()}
+                  ref={mapDialogRef}
+                  role="dialog"
+                  tabIndex={-1}
+                >
+                  <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5 sm:px-5">
+                    <div className="flex items-center gap-2.5">
+                      <h2
+                        className="font-display text-base font-semibold sm:text-lg"
+                        id={mapDialogTitleId}
+                      >
+                        {copy.map}
+                      </h2>
+                      {pinnedCount > 0 ? (
+                        <Badge size="sm" tone="neutral">
+                          <span data-numeric>
+                            {formatNumber(pinnedCount, locale)}
+                          </span>{' '}
+                          {copy.pinnedLocations}
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => {
+                          setSelectedMapId(undefined);
+                          setMapResetTrigger((previous) => previous + 1);
+                        }}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {copy.resetMap}
+                      </Button>
+                      <Link
+                        className="inline-flex min-h-tap items-center gap-1.5 rounded-pill border border-border bg-surface-raised px-4 text-xs font-semibold text-ink transition-colors hover:border-primary hover:bg-primary hover:text-white"
+                        href="/browse?view=map"
+                        onClick={closeMapModal}
+                      >
+                        {copy.browseListings}
+                        <ArrowIcon className="flip-inline size-4" />
+                      </Link>
+                      <Button
+                        aria-label={copy.closeMap}
+                        icon={<CloseIcon className="size-[1.1rem]" />}
+                        iconOnly
+                        onClick={closeMapModal}
+                        size="sm"
+                        variant="ghost"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="relative min-h-0 w-full flex-1 overflow-hidden">
+                    <SchematicMap
+                      className="h-full w-full rounded-none border-0 shadow-none"
+                      height="100%"
+                      key={`modal-map-${modalMapKey}`}
+                      labels={labels}
+                      listings={mapListings.listings}
+                      locale={locale}
+                      onReset={() => setSelectedMapId(undefined)}
+                      onSelect={setSelectedMapId}
+                      resetTrigger={mapResetTrigger}
+                      selectedId={selectedMapId}
+                    />
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {/* The way into the map, parked above the fold on every scroll position. */}
+        {mounted && !isModalOpen ? (
+          <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2">
+            <button
+              className="inline-flex min-h-tap items-center gap-2.5 rounded-pill bg-ink px-6 text-sm font-semibold text-on-ink shadow-float transition-transform duration-300 ease-spring hover:scale-105 active:scale-95"
+              data-testid="show-map"
+              onClick={() => {
+                setSelectedMapId(undefined);
+                setMapResetTrigger((previous) => previous + 1);
+                setIsModalOpen(true);
+              }}
+              ref={mapTriggerRef}
+              type="button"
+            >
+              {copy.showMap}
+              <MapIcon className="size-4" />
+            </button>
+          </div>
+        ) : null}
       </main>
     </>
   );

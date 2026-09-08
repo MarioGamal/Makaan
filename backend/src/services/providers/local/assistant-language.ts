@@ -414,6 +414,59 @@ function extractBedrooms(
 
 type Amount = { value: number; start: number; end: number };
 
+const SIZE_NOUNS =
+  'متر مربع|امتار|متر|م2|square meters|square meter|sqm|sq m|m2|meters|meter';
+
+function validSize(value: number | undefined): value is number {
+  return value !== undefined && value >= 20 && value <= 5_000;
+}
+
+/** Reads floor, ceiling, and range wording instead of treating every size as a minimum. */
+function extractSize(
+  text: string,
+  consumed: Consumed,
+): { min?: number; max?: number } {
+  const quantity = `(?:\\d+(?:\\.\\d+)?|${WORD_NUMBER_PATTERN})`;
+  const range = new RegExp(
+    `(?:من|from)?\\s*(${quantity})\\s*(?:لـ|ل|الي|و|-|to|and)\\s*(${quantity})\\s*(?:${SIZE_NOUNS})`,
+  );
+  const rangeMatch = range.exec(text);
+  if (rangeMatch) {
+    const min = numberFrom(rangeMatch[1] as string);
+    const max = numberFrom(rangeMatch[2] as string);
+    if (validSize(min) && validSize(max) && min <= max) {
+      consumed.claim(rangeMatch.index, rangeMatch.index + rangeMatch[0].length);
+      return { min: Math.round(min), max: Math.round(max) };
+    }
+  }
+
+  const directional = [
+    {
+      key: 'max' as const,
+      pattern: new RegExp(
+        `(?:اقل من|تحت|لحد|حتي|under|less than|up to|at most|max(?:imum)?)\\s*(${quantity})\\s*(?:${SIZE_NOUNS})`,
+      ),
+    },
+    {
+      key: 'min' as const,
+      pattern: new RegExp(
+        `(?:اكتر من|اكثر من|فوق|علي الاقل|over|more than|at least|min(?:imum)?)\\s*(${quantity})\\s*(?:${SIZE_NOUNS})`,
+      ),
+    },
+  ];
+  for (const { key, pattern } of directional) {
+    const match = pattern.exec(text);
+    const value = match ? numberFrom(match[1] as string) : undefined;
+    if (match && validSize(value)) {
+      consumed.claim(match.index, match.index + match[0].length);
+      return { [key]: Math.round(value) };
+    }
+  }
+
+  const minimum = matchCountedNoun(text, SIZE_NOUNS, consumed);
+  return validSize(minimum) ? { min: Math.round(minimum) } : {};
+}
+
 /**
  * Reads Egyptian money expressions: digits, `مليون`/`ألف` scales, `k`/`m`
  * suffixes, `نص` halves, and bare figures that are large enough to be a price.
@@ -973,14 +1026,14 @@ export function extractFacets(
     if (bedrooms.min === undefined) signalCount += 1;
   }
 
-  const size = matchCountedNoun(
-    text,
-    'متر مربع|امتار|متر|م2|square meters|square meter|sqm|sq m|m2|meters|meter',
-    consumed,
-  );
-  if (size !== undefined && size >= 20 && size <= 5_000) {
-    filters.sizeMin = Math.round(size);
+  const size = extractSize(text, consumed);
+  if (size.min !== undefined) {
+    filters.sizeMin = size.min;
     signalCount += 1;
+  }
+  if (size.max !== undefined) {
+    filters.sizeMax = size.max;
+    if (size.min === undefined) signalCount += 1;
   }
 
   const sale = SALE_PATTERN.test(text);

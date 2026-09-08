@@ -230,7 +230,7 @@ export function AssistantWidget() {
                           copy={copy}
                           key={listing.id}
                           listing={listing}
-                          locale={locale}
+                          locale={turn.payload.locale}
                           onNavigate={() => setOpen(false)}
                         />
                       ))}
