@@ -1,55 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
+import type { PublicListingCard } from '@makaan/shared/types/marketplace';
+
+import { useSavedListings } from '../../hooks/useSavedListings';
 import { useLocale } from '../layout/LocaleProvider';
 import { Button } from '../ui/Button';
+import { HeartIcon } from '../ui/icons';
 import { catalogues } from '../../i18n';
-import { fetchSavedListings, setListingSaved } from '../../services/saved.service';
 
+/**
+ * The labelled save control used where there is room for words: the detail
+ * page and the saved list. Card grids use {@link SaveToggle} instead.
+ */
 export function SaveButton({
   listingId,
+  listing,
   compact = false,
   onSavedChange,
 }: {
   listingId: string;
+  /** Lets the shared cache update before the server answers. */
+  listing?: PublicListingCard;
   compact?: boolean;
   onSavedChange?: (saved: boolean) => void;
 }) {
   const { locale } = useLocale();
   const copy = catalogues[locale].marketplace;
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { isSaved, toggle, isLoading } = useSavedListings();
+  const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const saved = isSaved(listingId);
 
-  useEffect(() => {
-    let active = true;
-    void fetchSavedListings()
-      .then((items) => {
-        if (active) setSaved(items.some((item) => item.id === listingId));
-      })
-      .catch(() => {
-        if (active) setMessage(copy.saveUnavailable);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [copy.saveUnavailable, listingId]);
-
-  const toggle = async () => {
-    const nextSaved = !saved;
-    setLoading(true);
+  const onClick = async () => {
+    const next = !saved;
+    setPending(true);
     setMessage(null);
     try {
-      const result = await setListingSaved(listingId, nextSaved);
-      setSaved(result.saved);
-      onSavedChange?.(result.saved);
-      setMessage(result.saved ? copy.savedConfirmation : copy.unsavedConfirmation);
+      await toggle(listingId, next, listing);
+      onSavedChange?.(next);
+      setMessage(next ? copy.savedConfirmation : copy.unsavedConfirmation);
     } catch {
       setMessage(copy.saveUnavailable);
     } finally {
-      setLoading(false);
+      setPending(false);
     }
   };
 
@@ -57,9 +50,16 @@ export function SaveButton({
     <div className={compact ? 'w-full' : ''}>
       <Button
         aria-pressed={saved}
+        data-testid="save-listing-button"
         fullWidth={compact}
-        loading={loading}
-        onClick={() => void toggle()}
+        icon={
+          <HeartIcon
+            className={`size-[1.1rem] ${saved ? 'text-danger' : ''}`}
+            filled={saved}
+          />
+        }
+        loading={pending || isLoading}
+        onClick={() => void onClick()}
         variant="secondary"
       >
         {saved ? copy.unsave : copy.save}

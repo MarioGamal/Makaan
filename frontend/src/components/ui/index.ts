@@ -6,6 +6,7 @@ export * from './Drawer';
 export * from './Input';
 export * from './LiveRegion';
 export * from './Modal';
+export * from './SegmentedControl';
 export * from './Select';
 export * from './Skeleton';
 export * from './ScrollReveal';
