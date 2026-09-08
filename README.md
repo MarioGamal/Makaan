@@ -26,7 +26,7 @@ shared/         Types and enums shared by frontend and backend
 infrastructure/ Local Docker Compose and local-media storage
 scripts/        Service, migration, and validation commands
 specs/          SpecKit specifications, plans, tasks, and release evidence
-docs/           Configuration, deployment, and brand handoffs
+docs/           Configuration, deployment, frontend architecture, and brand handoffs
 tests/          Browser/E2E suites and fixtures
 ```
 
@@ -109,6 +109,8 @@ stored directly in Vercel and Render; Neon, Upstash, and Cloudinary access shoul
 their own team/member controls when someone genuinely needs operational access.
 
 See [configuration details](docs/configuration.md) for the complete environment contract.
+For the interface itself — design tokens, theming, folder layout, search state, and what renders on
+the server — see [frontend architecture](docs/frontend-architecture.md).
 
 ## Local fixtures
 
