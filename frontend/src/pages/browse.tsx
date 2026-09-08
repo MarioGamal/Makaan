@@ -24,7 +24,12 @@ import { parseBoundingBox } from '../lib/geo';
 import { searchListings } from '../services/listings.service';
 import { localeFromCookie } from '../utils/locale';
 
-const PAGE_SIZE = 20;
+/**
+ * Divisible by every column count the grid uses — one, two and three — so a
+ * page never ends in a half-empty row. Twenty left a gap on the last row at
+ * three columns. The API caps a page at 40.
+ */
+const PAGE_SIZE = 24;
 const FIRST_ROW = 3;
 
 type BrowsePageProps = {
