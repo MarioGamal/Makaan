@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -301,13 +308,17 @@ export default function HomePage() {
   const [modalMapKey, setModalMapKey] = useState(0);
   const [mapResetTrigger, setMapResetTrigger] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const mapDialogTitleId = useId();
+  const mapDialogRef = useRef<HTMLDivElement>(null);
+  const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const mapWasOpenRef = useRef(false);
 
-  const closeMapModal = () => {
+  const closeMapModal = useCallback(() => {
     setIsModalOpen(false);
     setSelectedMapId(undefined);
     setModalMapKey((prev) => prev + 1);
     setMapResetTrigger((prev) => prev + 1);
-  };
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -321,32 +332,53 @@ export default function HomePage() {
     return () => {
       router.events?.off('routeChangeStart', handleRouteChange);
     };
-  }, [router]);
+  }, [closeMapModal, router.events]);
 
   useEffect(() => {
+    if (!isModalOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isModalOpen) {
+      if (e.key === 'Escape') {
         closeMapModal();
+        return;
+      }
+      if (e.key === 'Tab' && mapDialogRef.current) {
+        const focusable = Array.from(
+          mapDialogRef.current.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
-    if (isModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => mapDialogRef.current?.focus());
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
+  }, [closeMapModal, isModalOpen]);
+
+  useEffect(() => {
+    if (mapWasOpenRef.current && !isModalOpen) {
+      requestAnimationFrame(() => mapTriggerRef.current?.focus());
+    }
+    mapWasOpenRef.current = isModalOpen;
   }, [isModalOpen]);
 
-  const mapListings = useListings({
-    locale,
-    page: 1,
-    pageSize: 20,
-    sort: 'newest',
-  });
+  const mapListings = useListings(
+    isModalOpen ? { locale, page: 1, pageSize: 40, sort: 'newest' } : null,
+  );
 
   const featured = useListings({
     locale,
@@ -405,7 +437,10 @@ export default function HomePage() {
               </div>
               <div className="hero-search-in grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="rounded-[1.25rem] sm:rounded-[1.5rem] bg-white/95 p-2.5 sm:p-3.5 text-ink shadow-panel backdrop-blur md:p-4">
-                  <div className="mb-2.5 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2" role="group">
+                  <div
+                    className="mb-2.5 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2"
+                    role="group"
+                  >
                     {[
                       { value: undefined, label: copy.anyPurpose },
                       { value: 'sale' as const, label: copy.sale },
@@ -413,7 +448,7 @@ export default function HomePage() {
                     ].map((option) => (
                       <button
                         aria-pressed={purpose === option.value}
-                        className={`min-h-8.5 sm:min-h-9.5 rounded-full px-3.5 sm:px-4 text-xs sm:text-sm font-semibold transition ${
+                        className={`min-h-9 sm:min-h-10 rounded-full px-3.5 sm:px-4 text-xs sm:text-sm font-semibold transition ${
                           purpose === option.value
                             ? 'bg-ink text-white'
                             : 'bg-surface-muted text-ink hover:bg-primary-soft'
@@ -431,7 +466,10 @@ export default function HomePage() {
                       label={copy.area}
                       onSelect={(area) => setAreaId(area.id)}
                     />
-                    <Button className="md:min-w-36 min-h-10 sm:min-h-11 text-xs sm:text-sm" onClick={browse}>
+                    <Button
+                      className="md:min-w-36 min-h-10 sm:min-h-11 text-xs sm:text-sm"
+                      onClick={browse}
+                    >
                       {copy.search}
                     </Button>
                   </div>
@@ -509,109 +547,117 @@ export default function HomePage() {
       </div>
 
       {/* Fullscreen Map Modal (Rendered via Portal to document.body) */}
-      {mounted && isModalOpen && createPortal(
-        <div
-          aria-modal="true"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/75 p-3 backdrop-blur-sm sm:p-6 md:p-8"
-          onClick={closeMapModal}
-          role="dialog"
-        >
+      {mounted &&
+        isModalOpen &&
+        createPortal(
           <div
-            className="relative flex h-[90vh] w-[95vw] max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl md:h-[85vh] md:rounded-[2rem]"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/75 p-3 backdrop-blur-sm sm:p-6 md:p-8"
+            onClick={closeMapModal}
           >
-            {/* Modal Header */}
-            <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5 sm:px-6">
-              <div className="flex items-center gap-3">
-                <h2 className="font-display text-base font-normal text-ink sm:text-lg">
-                  {copy.map}
-                </h2>
-                <span className="hidden rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-muted sm:inline-flex">
-                  {
-                    mapListings.listings.filter(
-                      (l) => l.publicLocation.mode === 'approximate',
-                    ).length
-                  }{' '}
-                  {locale === 'ar' ? 'موقع تقريبي' : 'verified locations'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 sm:gap-3">
-                {/* Reset Map View Button */}
-                <button
-                  aria-label={
-                    locale === 'ar' ? 'إعادة ضبط الخريطة' : 'Reset map view'
-                  }
-                  className="flex h-8.5 items-center gap-1.5 rounded-full bg-surface-raised border border-border px-3 text-xs font-semibold text-ink shadow-sm transition hover:border-primary hover:text-primary active:scale-95 focus-visible:outline-none"
-                  onClick={() => {
-                    setSelectedMapId(undefined);
-                    setMapResetTrigger((prev) => prev + 1);
-                  }}
-                  title={
-                    locale === 'ar' ? 'إعادة ضبط الخريطة' : 'Reset map view'
-                  }
-                  type="button"
-                >
-                  <svg
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    viewBox="0 0 24 24"
+            <div
+              aria-labelledby={mapDialogTitleId}
+              aria-modal="true"
+              className="relative flex h-[90vh] w-[95vw] max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl md:h-[85vh] md:rounded-[2rem]"
+              onClick={(e) => e.stopPropagation()}
+              ref={mapDialogRef}
+              role="dialog"
+              tabIndex={-1}
+            >
+              {/* Modal Header */}
+              <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5 sm:px-6">
+                <div className="flex items-center gap-3">
+                  <h2
+                    className="font-display text-base font-normal text-ink sm:text-lg"
+                    id={mapDialogTitleId}
                   >
-                    <path
-                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="hidden xs:inline">
-                    {locale === 'ar' ? 'إعادة ضبط' : 'Reset'}
+                    {copy.map}
+                  </h2>
+                  <span className="hidden rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-muted sm:inline-flex">
+                    {
+                      mapListings.listings.filter(
+                        (l) => l.publicLocation.mode === 'approximate',
+                      ).length
+                    }{' '}
+                    {locale === 'ar' ? 'موقع تقريبي' : 'verified locations'}
                   </span>
-                </button>
+                </div>
 
-                <Link
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-raised px-4 py-1.5 text-xs font-bold text-ink shadow-sm transition hover:border-primary hover:bg-primary hover:text-white active:scale-95"
-                  href="/browse?view=map"
-                  onClick={closeMapModal}
-                >
-                  <span>{copy.browseListings}</span>
-                  <span aria-hidden="true" className="rtl:rotate-180">
-                    →
-                  </span>
-                </Link>
-                <button
-                  aria-label={locale === 'ar' ? 'إغلاق الخريطة' : 'Close map'}
-                  className="flex h-8.5 items-center gap-1.5 rounded-full bg-surface-raised border border-border px-3.5 text-xs font-bold text-ink shadow-sm transition hover:border-danger hover:bg-danger hover:text-white active:scale-95 focus-visible:outline-none"
-                  onClick={closeMapModal}
-                  title={locale === 'ar' ? 'إغلاق الخريطة' : 'Close map'}
-                  type="button"
-                >
-                  <span className="text-sm font-bold leading-none">✕</span>
-                  <span>{locale === 'ar' ? 'إغلاق' : 'Close'}</span>
-                </button>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {/* Reset Map View Button */}
+                  <button
+                    aria-label={
+                      locale === 'ar' ? 'إعادة ضبط الخريطة' : 'Reset map view'
+                    }
+                    className="flex h-9 items-center gap-1.5 rounded-full bg-surface-raised border border-border px-3 text-xs font-semibold text-ink shadow-sm transition hover:border-primary hover:text-primary active:scale-95 focus-visible:outline-none"
+                    onClick={() => {
+                      setSelectedMapId(undefined);
+                      setMapResetTrigger((prev) => prev + 1);
+                    }}
+                    title={
+                      locale === 'ar' ? 'إعادة ضبط الخريطة' : 'Reset map view'
+                    }
+                    type="button"
+                  >
+                    <svg
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="hidden sm:inline">
+                      {locale === 'ar' ? 'إعادة ضبط' : 'Reset'}
+                    </span>
+                  </button>
+
+                  <Link
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-raised px-4 py-1.5 text-xs font-bold text-ink shadow-sm transition hover:border-primary hover:bg-primary hover:text-white active:scale-95"
+                    href="/browse?view=map"
+                    onClick={closeMapModal}
+                  >
+                    <span>{copy.browseListings}</span>
+                    <span aria-hidden="true" className="rtl:rotate-180">
+                      →
+                    </span>
+                  </Link>
+                  <button
+                    aria-label={locale === 'ar' ? 'إغلاق الخريطة' : 'Close map'}
+                    className="flex h-9 items-center gap-1.5 rounded-full bg-surface-raised border border-border px-3.5 text-xs font-bold text-ink shadow-sm transition hover:border-danger hover:bg-danger hover:text-white active:scale-95 focus-visible:outline-none"
+                    onClick={closeMapModal}
+                    title={locale === 'ar' ? 'إغلاق الخريطة' : 'Close map'}
+                    type="button"
+                  >
+                    <span className="text-sm font-bold leading-none">✕</span>
+                    <span>{locale === 'ar' ? 'إغلاق' : 'Close'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Map Viewport - Confined strictly to remaining screen space */}
+              <div className="relative w-full flex-1 min-h-0 min-w-0 overflow-hidden">
+                <SchematicMap
+                  className="h-full w-full rounded-none border-0 shadow-none"
+                  height="100%"
+                  key={`modal-map-${modalMapKey}`}
+                  labels={copy}
+                  listings={mapListings.listings}
+                  locale={locale}
+                  onReset={() => setSelectedMapId(undefined)}
+                  onSelect={setSelectedMapId}
+                  resetTrigger={mapResetTrigger}
+                  selectedId={selectedMapId}
+                />
               </div>
             </div>
-
-            {/* Modal Map Viewport - Confined strictly to remaining screen space */}
-            <div className="relative w-full flex-1 min-h-0 min-w-0 overflow-hidden">
-              <SchematicMap
-                className="h-full w-full rounded-none border-0 shadow-none"
-                height="100%"
-                key={`modal-map-${modalMapKey}`}
-                labels={copy}
-                listings={mapListings.listings}
-                locale={locale}
-                onReset={() => setSelectedMapId(undefined)}
-                onSelect={setSelectedMapId}
-                resetTrigger={mapResetTrigger}
-                selectedId={selectedMapId}
-              />
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* 5. Airbnb-style Floating Bottom Pill */}
       {mounted && !isModalOpen && (
@@ -624,6 +670,7 @@ export default function HomePage() {
               setMapResetTrigger((prev) => prev + 1);
               setIsModalOpen(true);
             }}
+            ref={mapTriggerRef}
             type="button"
           >
             <span>{locale === 'ar' ? 'عرض الخريطة' : 'Show map'}</span>

@@ -10,7 +10,10 @@ import {
   propertyTypeLabel,
   type Locale,
 } from '../../i18n';
-import { fetchSavedListings, setListingSaved } from '../../services/saved.service';
+import {
+  fetchSavedListings,
+  setListingSaved,
+} from '../../services/saved.service';
 import { Button, Card } from '../ui';
 
 const Map = dynamic(
@@ -35,13 +38,13 @@ export function formatShortPrice(price: number, locale: Locale = 'ar') {
       const millions = price / 1_000_000;
       const formatted =
         millions >= 10 ? Math.round(millions) : Number(millions.toFixed(1));
-      return `${formatted} مليون ج.م`;
+      return `${formatNumber(formatted, locale)} مليون ج.م`;
     }
     if (price >= 1_000) {
       const thousands = Math.round(price / 1_000);
-      return `${thousands} ألف ج.م`;
+      return `${formatNumber(thousands, locale)} ألف ج.م`;
     }
-    return `${price} ج.م`;
+    return `${formatNumber(price, locale)} ج.م`;
   }
 
   if (price >= 1_000_000) {
@@ -285,7 +288,6 @@ export function SchematicMap({
           {/* Absolutely Positioned Map Frame - Cannot Expand Parent */}
           <div className="absolute inset-0 h-full w-full overflow-hidden">
             <Map
-              attributionControl={false}
               initialViewState={{ latitude, longitude, zoom: 10.5 }}
               mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
               mapStyle="mapbox://styles/mapbox/streets-v12"
@@ -335,7 +337,7 @@ export function SchematicMap({
                         aria-pressed={isSelected}
                         className={`group relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 transform ${
                           isSelected
-                            ? 'scale-110 sm:scale-120 bg-primary text-white shadow-[0_10px_25px_rgba(18,92,78,0.5),0_2px_8px_rgba(0,0,0,0.15)] ring-[2.5px] ring-white ring-offset-2 ring-offset-primary z-40'
+                            ? 'scale-110 sm:scale-125 bg-primary text-white shadow-[0_10px_25px_rgba(18,92,78,0.5),0_2px_8px_rgba(0,0,0,0.15)] ring-[2.5px] ring-white ring-offset-2 ring-offset-primary z-40'
                             : 'bg-surface-raised text-ink shadow-md border border-border/80 hover:scale-105 hover:bg-primary hover:text-white hover:border-primary z-10'
                         }`}
                         onClick={(e) => {
@@ -351,10 +353,10 @@ export function SchematicMap({
                             isSelected
                               ? 'bg-white shadow-sm ring-1 ring-white/60'
                               : listing.participation === 'verified_owner'
-                              ? 'bg-success'
-                              : listing.participation === 'declared_agent'
-                              ? 'bg-warning'
-                              : 'bg-primary'
+                                ? 'bg-success'
+                                : listing.participation === 'declared_agent'
+                                  ? 'bg-warning'
+                                  : 'bg-primary'
                           }`}
                         />
 
@@ -555,12 +557,12 @@ function MapListingPreviewCard({
       labels.verified_owner ||
       (locale === 'ar' ? 'مالك موثق' : 'Verified Owner')
     : isAgent
-    ? labels.agent ||
-      labels.declared_agent ||
-      (locale === 'ar' ? 'وكيل معلن' : 'Declared Agent')
-    : labels.owner ||
-      labels.owner_not_verified ||
-      (locale === 'ar' ? 'مالك' : 'Owner');
+      ? labels.agent ||
+        labels.declared_agent ||
+        (locale === 'ar' ? 'وكيل معلن' : 'Declared Agent')
+      : labels.owner ||
+        labels.owner_not_verified ||
+        (locale === 'ar' ? 'مالك' : 'Owner');
 
   const handleCardClick = () => {
     void router.push(`/listings/${listing.id}`);
@@ -606,7 +608,7 @@ function MapListingPreviewCard({
       </button>
 
       {/* Thumbnail Container with Badges and Wishlist */}
-      <div className="relative w-32 xs:w-36 sm:w-44 shrink-0 overflow-hidden bg-[#eee8dc] m-2 sm:m-2.5 rounded-xl sm:rounded-2xl">
+      <div className="relative w-32 sm:w-44 shrink-0 overflow-hidden bg-[#eee8dc] m-2 sm:m-2.5 rounded-xl sm:rounded-2xl">
         {listing.coverImage && !imageBroken ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -631,7 +633,8 @@ function MapListingPreviewCard({
               />
             </svg>
             <span className="text-[10px] font-medium leading-tight text-ink-muted">
-              {labels.noImage || (locale === 'ar' ? 'لا توجد صورة' : 'No image')}
+              {labels.noImage ||
+                (locale === 'ar' ? 'لا توجد صورة' : 'No image')}
             </span>
           </div>
         )}
@@ -650,7 +653,7 @@ function MapListingPreviewCard({
                 (locale === 'ar' ? 'شيله من المحفوظات' : 'Remove from saved')
               : labels.save || (locale === 'ar' ? 'احفظه' : 'Save home')
           }
-          className={`absolute start-2 top-2 z-20 flex items-center justify-center p-1 bg-transparent transition-transform duration-200 hover:scale-115 active:scale-90 focus:outline-none ${
+          className={`absolute start-2 top-2 z-20 flex items-center justify-center p-1 bg-transparent transition-transform duration-200 hover:scale-110 active:scale-90 focus:outline-none ${
             savePopping ? 'animate-heart-pop' : ''
           }`}
           onClick={handleToggleSave}
@@ -663,7 +666,7 @@ function MapListingPreviewCard({
           type="button"
         >
           <svg
-            className={`h-5 w-5 sm:h-5.5 sm:w-5.5 transition-colors duration-200 ${
+            className={`h-5 w-5 sm:h-6 sm:w-6 transition-colors duration-200 ${
               isSaved
                 ? 'fill-danger stroke-danger drop-shadow-[0_2px_6px_rgba(174,62,50,0.6)]'
                 : 'fill-black/25 stroke-white stroke-[2] drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] hover:fill-danger/40 hover:stroke-white'
@@ -830,7 +833,7 @@ function MapListingPreviewCard({
         {/* Bottom CTA Row */}
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
           {/* Privacy Note */}
-          <div className="hidden xs:flex items-center gap-1 text-[10px] font-medium text-ink-muted truncate">
+          <div className="hidden sm:flex items-center gap-1 text-[10px] font-medium text-ink-muted truncate">
             <svg
               className="h-3 w-3 shrink-0 text-primary"
               fill="none"
@@ -857,8 +860,7 @@ function MapListingPreviewCard({
             onClick={(e) => e.stopPropagation()}
           >
             <span>
-              {labels.details ||
-                (locale === 'ar' ? 'عرض التفاصيل' : 'Details')}
+              {labels.details || (locale === 'ar' ? 'عرض التفاصيل' : 'Details')}
             </span>
             <svg
               aria-hidden="true"

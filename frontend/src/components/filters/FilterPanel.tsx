@@ -170,9 +170,7 @@ export function FilterPanel({
               }
               type="button"
             >
-              <span>
-                {filterLabel(key, value, copy, locale)}
-              </span>
+              <span>{filterLabel(key, value, copy, locale)}</span>
               <span aria-hidden="true">×</span>
             </button>
           ))}
@@ -182,12 +180,7 @@ export function FilterPanel({
   );
 }
 
-function filterLabel(
-  key: string,
-  value: unknown,
-  copy: Copy,
-  locale: Locale,
-) {
+function filterLabel(key: string, value: unknown, copy: Copy, locale: Locale) {
   if (key === 'propertyType' && Array.isArray(value)) {
     return value.map((type) => propertyTypeLabel(locale, type)).join(', ');
   }
@@ -205,7 +198,5 @@ function filterLabel(
     sizeMax: copy.maxSize,
     bedroomsMin: copy.bedrooms,
   };
-  return labels[key]
-    ? `${labels[key]}: ${String(value)}`
-    : String(value);
+  return labels[key] ? `${labels[key]}: ${String(value)}` : String(value);
 }

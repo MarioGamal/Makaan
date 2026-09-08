@@ -5,11 +5,13 @@ import {
   type ListingSearchParams,
 } from '../services/listings.service';
 
-export function useListings(params: ListingSearchParams) {
-  const key = ['public-listings', JSON.stringify(params)] as const;
+export function useListings(params: ListingSearchParams | null) {
+  const key = params
+    ? (['public-listings', JSON.stringify(params)] as const)
+    : null;
   const { data, error, isLoading, mutate } = useSWR(
     key,
-    () => searchListings(params),
+    () => searchListings(params!),
     {
       keepPreviousData: true,
     },
