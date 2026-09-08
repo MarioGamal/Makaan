@@ -1,7 +1,13 @@
-import type { PublicListingCard } from '@makaan/shared/types/marketplace';
 import dynamic from 'next/dynamic';
+import { useCallback, useMemo } from 'react';
 
-import { Button, Card } from '../ui';
+import type { PublicListingCard } from '@makaan/shared/types/marketplace';
+
+import { CAIRO_CENTER, type BoundingBox } from '../../lib/geo';
+import { formatCurrency, type Locale } from '../../i18n';
+import { useTheme } from '../layout/ThemeProvider';
+import { Button } from '../ui';
+import { PinIcon } from '../ui/icons';
 
 const Map = dynamic(
   async () => {
@@ -19,59 +25,114 @@ const Marker = dynamic(
   { ssr: false },
 );
 
+type MapMoveEvent = {
+  target?: {
+    getBounds?: () => {
+      getWest: () => number;
+      getSouth: () => number;
+      getEast: () => number;
+      getNorth: () => number;
+    };
+  };
+};
+
 /** Public map boundary: only approved approximate locations become pins. */
 export function SchematicMap({
   listings,
   selectedId,
   onSelect,
   labels,
+  locale,
+  onViewportChange,
+  onSearchArea,
+  mapMoved = false,
 }: {
   listings: PublicListingCard[];
   selectedId?: string;
   onSelect: (id: string) => void;
   labels: Record<string, string>;
+  locale: Locale;
+  /** Fired on every frame of a pan or zoom; the caller throttles. */
+  onViewportChange?: (box: BoundingBox) => void;
+  onSearchArea?: () => void;
+  mapMoved?: boolean;
 }) {
-  const pins = listings.filter(
-    (listing) => listing.publicLocation.mode === 'approximate',
+  const { resolved } = useTheme();
+  const pins = useMemo(
+    () =>
+      listings.filter(
+        (listing) => listing.publicLocation.mode === 'approximate',
+      ),
+    [listings],
   );
   const hasMapbox =
     process.env.NEXT_PUBLIC_MAP_PROVIDER === 'mapbox' &&
     Boolean(process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
-  const coordinates = pins.flatMap((listing) =>
-    listing.publicLocation.mode === 'approximate'
-      ? [
-          {
-            latitude: listing.publicLocation.latitude,
-            longitude: listing.publicLocation.longitude,
-          },
-        ]
-      : [],
+
+  const center = useMemo(() => {
+    const points = pins.flatMap((listing) =>
+      listing.publicLocation.mode === 'approximate'
+        ? [
+            {
+              latitude: listing.publicLocation.latitude,
+              longitude: listing.publicLocation.longitude,
+            },
+          ]
+        : [],
+    );
+    if (points.length === 0) return CAIRO_CENTER;
+    return {
+      latitude:
+        points.reduce((total, point) => total + point.latitude, 0) /
+        points.length,
+      longitude:
+        points.reduce((total, point) => total + point.longitude, 0) /
+        points.length,
+    };
+  }, [pins]);
+
+  const onMove = useCallback(
+    (event: MapMoveEvent) => {
+      const bounds = event.target?.getBounds?.();
+      if (!bounds || !onViewportChange) return;
+      onViewportChange({
+        west: bounds.getWest(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        north: bounds.getNorth(),
+      });
+    },
+    [onViewportChange],
   );
-  const latitude = coordinates.length
-    ? coordinates.reduce((total, point) => total + point.latitude, 0) /
-      coordinates.length
-    : 30.0444;
-  const longitude = coordinates.length
-    ? coordinates.reduce((total, point) => total + point.longitude, 0) /
-      coordinates.length
-    : 31.2357;
+
+  const areaOnlyCount = listings.length - pins.length;
+  const footnote =
+    areaOnlyCount > 0
+      ? `${areaOnlyCount} ${labels.areaOnly}`
+      : labels.allPinned;
 
   return (
-    <Card
+    <section
       aria-label={labels.map}
-      className="relative min-h-[22rem] overflow-hidden bg-primary-soft p-0"
+      className="relative overflow-hidden rounded-card border border-border bg-primary-soft shadow-ui"
+      data-testid="local-map"
     >
       {hasMapbox ? (
         <div className="relative">
           <Map
-            initialViewState={{ latitude, longitude, zoom: 10.5 }}
-            mapStyle="mapbox://styles/mapbox/streets-v12"
+            initialViewState={{ ...center, zoom: 10.5 }}
+            mapStyle={
+              resolved === 'dark'
+                ? 'mapbox://styles/mapbox/dark-v11'
+                : 'mapbox://styles/mapbox/light-v11'
+            }
             mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-            style={{ width: '100%', height: 440 }}
+            onMove={onMove}
+            style={{ width: '100%', height: 520 }}
           >
-            {pins.map((listing, index) => {
+            {pins.map((listing) => {
               if (listing.publicLocation.mode !== 'approximate') return null;
-              const markerLabel = `${labels.pin} ${index + 1}: ${listing.title}`;
+              const selected = selectedId === listing.id;
               return (
                 <Marker
                   anchor="bottom"
@@ -80,89 +141,133 @@ export function SchematicMap({
                   longitude={listing.publicLocation.longitude}
                 >
                   <button
-                    aria-label={markerLabel}
-                    aria-pressed={selectedId === listing.id}
-                    className={`h-8 w-8 rounded-full border-2 border-white shadow-lg transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-                      selectedId === listing.id ? 'bg-ink' : 'bg-clay'
+                    aria-label={`${listing.title} — ${formatCurrency(listing.priceEgp, locale)}`}
+                    aria-pressed={selected}
+                    // Map pins are the one control kept under the 44px
+                    // interface baseline: at that size the pills of a dense
+                    // result set cover each other and the map underneath.
+                    // 30px still clears the 24px WCAG 2.2 minimum.
+                    className={`min-h-8 rounded-pill border px-2.5 py-1 text-xs font-semibold shadow-panel transition-transform duration-200 ease-spring hover:scale-105 ${
+                      selected
+                        ? 'border-transparent bg-ink text-on-ink'
+                        : 'border-white/70 bg-primary text-white'
                     }`}
+                    data-listing-id={listing.id}
+                    data-testid="map-listing-marker"
                     onClick={() => onSelect(listing.id)}
-                    title={markerLabel}
                     type="button"
-                  />
+                  >
+                    <span data-numeric>
+                      {formatCurrency(listing.priceEgp, locale)}
+                    </span>
+                  </button>
                 </Marker>
               );
             })}
           </Map>
-          <div className="absolute inset-x-4 top-4 max-w-sm rounded-2xl bg-canvas/90 p-3 text-sm text-ink-muted shadow-sm backdrop-blur">
+
+          <p className="glass absolute inset-x-4 top-4 max-w-sm rounded-panel p-3 text-xs text-ink-muted shadow-ui">
             {labels.mapDescription}
-          </div>
-          <p className="m-0 p-4 text-xs text-ink-muted">
-            {listings.length - pins.length > 0
-              ? `${listings.length - pins.length} ${labels.areaOnly}`
-              : labels.allPinned}
           </p>
+
+          {/*
+           * Results only change when the visitor asks, so a pan never shifts
+           * the list out from under the cursor.
+           */}
+          {mapMoved && onSearchArea ? (
+            <div className="absolute inset-x-0 bottom-16 flex animate-fade-up justify-center">
+              <Button
+                data-testid="search-this-area"
+                icon={<PinIcon className="size-4" />}
+                onClick={onSearchArea}
+              >
+                {labels.searchThisArea}
+              </Button>
+            </div>
+          ) : null}
+
+          <p className="m-0 p-4 text-xs text-ink-muted">{footnote}</p>
         </div>
       ) : (
         <SchematicFallback
+          footnote={footnote}
           labels={labels}
-          listings={listings}
+          locale={locale}
           onSelect={onSelect}
           pins={pins}
           selectedId={selectedId}
         />
       )}
-    </Card>
+    </section>
   );
 }
 
+/**
+ * Shown when no map provider is configured, or when its tiles fail to load.
+ * The pins stay usable, so discovery never depends on a third party.
+ */
 function SchematicFallback({
-  listings,
   pins,
   selectedId,
   onSelect,
   labels,
+  locale,
+  footnote,
 }: {
-  listings: PublicListingCard[];
   pins: PublicListingCard[];
   selectedId?: string;
   onSelect: (id: string) => void;
   labels: Record<string, string>;
+  locale: Locale;
+  footnote: string;
 }) {
   return (
-    <>
+    <div className="relative min-h-[22rem]">
       <div
         aria-hidden="true"
-        className="absolute inset-0 opacity-40"
+        className="absolute inset-0 opacity-50"
         style={{
           backgroundImage:
-            'linear-gradient(35deg, transparent 46%, #125c4e22 47%, #125c4e22 53%, transparent 54%), linear-gradient(-20deg, transparent 47%, #b8643b33 48%, #b8643b33 52%, transparent 53%)',
+            'linear-gradient(35deg, transparent 46%, rgb(var(--color-primary) / 0.16) 47%, rgb(var(--color-primary) / 0.16) 53%, transparent 54%), linear-gradient(-20deg, transparent 47%, rgb(var(--color-accent) / 0.2) 48%, rgb(var(--color-accent) / 0.2) 52%, transparent 53%)',
           backgroundSize: '120px 120px',
         }}
       />
-      <div className="relative flex h-full min-h-[22rem] flex-col justify-between p-5">
-        <p className="max-w-sm text-sm text-ink-muted">
-          {labels.mapDescription}
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {pins.map((listing, index) => (
-            <Button
+      <div className="relative flex min-h-[22rem] flex-col justify-between gap-5 p-5">
+        <div
+          className="max-w-md"
+          data-testid="map-fallback-status"
+          role="status"
+        >
+          <p className="font-semibold text-ink">{labels.mapUnavailable}</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            {labels.mapUnavailableHint}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {pins.map((listing) => (
+            <button
+              aria-label={`${listing.title} — ${formatCurrency(listing.priceEgp, locale)}`}
               aria-pressed={selectedId === listing.id}
-              className="justify-start"
+              className={`inline-flex min-h-tap items-center gap-1.5 rounded-pill border px-3 text-xs font-semibold transition-colors ${
+                selectedId === listing.id
+                  ? 'border-transparent bg-primary text-white'
+                  : 'border-border bg-surface-raised text-ink hover:border-primary'
+              }`}
+              data-listing-id={listing.id}
+              data-testid="map-listing-marker"
               key={listing.id}
               onClick={() => onSelect(listing.id)}
-              size="sm"
-              variant={selectedId === listing.id ? 'primary' : 'secondary'}
+              type="button"
             >
-              {labels.pin} {index + 1}
-            </Button>
+              <PinIcon className="size-3.5" />
+              <span data-numeric>
+                {formatCurrency(listing.priceEgp, locale)}
+              </span>
+            </button>
           ))}
         </div>
-        <p className="text-xs text-ink-muted">
-          {listings.length - pins.length > 0
-            ? `${listings.length - pins.length} ${labels.areaOnly}`
-            : labels.allPinned}
-        </p>
+        <p className="text-xs text-ink-muted">{footnote}</p>
       </div>
-    </>
+    </div>
   );
 }
