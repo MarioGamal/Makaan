@@ -664,7 +664,7 @@ export default function HomePage() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
           <button
             aria-label={locale === 'ar' ? 'عرض الخريطة' : 'Show map'}
-            className="group flex items-center gap-2.5 rounded-full bg-ink px-6 py-3.5 text-sm font-bold text-white shadow-[0_12px_32px_rgba(25,42,37,0.35),0_2px_8px_rgba(0,0,0,0.15)] border border-white/15 transition-all duration-300 hover:scale-105 hover:bg-primary active:scale-95 cursor-pointer backdrop-blur-md"
+            className="group flex items-center gap-2.5 rounded-full bg-primary hover:bg-primary-strong px-6 py-3.5 text-base sm:text-sm font-bold text-white shadow-[0_12px_32px_rgba(18,92,78,0.38),0_2px_8px_rgba(0,0,0,0.15)] border border-white/20 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
             onClick={() => {
               setSelectedMapId(undefined);
               setMapResetTrigger((prev) => prev + 1);
@@ -675,7 +675,7 @@ export default function HomePage() {
           >
             <span>{locale === 'ar' ? 'عرض الخريطة' : 'Show map'}</span>
             <svg
-              className="h-4 w-4 text-white/90 transition-transform duration-300 group-hover:scale-110"
+              className="h-5 w-5 sm:h-4 sm:w-4 text-white/90 transition-transform duration-300 group-hover:scale-110"
               fill="none"
               stroke="currentColor"
               strokeWidth={2}
