@@ -73,7 +73,7 @@ export function Modal({
     >
       <button
         aria-label={closeLabel}
-        className="absolute inset-0 h-full w-full cursor-default bg-ink/45"
+        className="absolute inset-0 h-full w-full cursor-default bg-scrim/55 backdrop-blur-sm"
         onClick={onClose}
         tabIndex={-1}
         type="button"

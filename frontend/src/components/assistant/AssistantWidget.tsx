@@ -269,7 +269,7 @@ export function AssistantWidget() {
               <p className="text-sm text-ink-muted">{copy.sending}</p>
             ) : null}
             {error ? (
-              <p className="rounded-ui bg-red-100 px-3 py-2 text-sm text-danger">
+              <p className="rounded-ui bg-danger-soft px-3 py-2 text-sm text-danger">
                 {error}
               </p>
             ) : null}

@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 
+import type { BoundingBox } from '../../lib/geo';
+import { useTheme } from '../layout/ThemeProvider';
+
 import {
   formatCurrency,
   formatNumber,
@@ -72,6 +75,9 @@ export function SchematicMap({
   hideControls = false,
   resetTrigger,
   onReset,
+  onViewportChange,
+  onSearchArea,
+  mapMoved = false,
 }: {
   listings: PublicListingCard[];
   selectedId?: string;
@@ -83,7 +89,34 @@ export function SchematicMap({
   hideControls?: boolean;
   resetTrigger?: number;
   onReset?: () => void;
+  /** Fired on every frame of a pan or zoom; the caller throttles. */
+  onViewportChange?: (box: BoundingBox) => void;
+  /** Promotes the visible envelope into the search. */
+  onSearchArea?: () => void;
+  /** True while the map sits away from the searched area. */
+  mapMoved?: boolean;
 }) {
+  const { resolved: resolvedTheme } = useTheme();
+
+  const handleMove = (event: {
+    target?: {
+      getBounds?: () => {
+        getWest: () => number;
+        getSouth: () => number;
+        getEast: () => number;
+        getNorth: () => number;
+      };
+    };
+  }) => {
+    const bounds = event.target?.getBounds?.();
+    if (!bounds || !onViewportChange) return;
+    onViewportChange({
+      west: bounds.getWest(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      north: bounds.getNorth(),
+    });
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapInstanceRef = useRef<any>(null);
 
@@ -271,6 +304,7 @@ export function SchematicMap({
   return (
     <Card
       aria-label={labels.map}
+      data-testid="local-map"
       className={`relative overflow-hidden rounded-[2rem] border border-border/80 bg-surface-raised shadow-panel ${
         isFullHeight
           ? 'flex h-full w-full flex-1 min-h-0 min-w-0 rounded-none border-0 shadow-none'
@@ -290,7 +324,12 @@ export function SchematicMap({
             <Map
               initialViewState={{ latitude, longitude, zoom: 10.5 }}
               mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-              mapStyle="mapbox://styles/mapbox/streets-v12"
+              mapStyle={
+                resolvedTheme === 'dark'
+                  ? 'mapbox://styles/mapbox/dark-v11'
+                  : 'mapbox://styles/mapbox/streets-v12'
+              }
+              onMove={handleMove}
               onClick={() => onSelect('')}
               onLoad={(evt) => {
                 mapInstanceRef.current = evt.target;
@@ -335,6 +374,8 @@ export function SchematicMap({
                       <button
                         aria-label={markerLabel}
                         aria-pressed={isSelected}
+                        data-listing-id={listing.id}
+                        data-testid="map-listing-marker"
                         className={`group relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 transform ${
                           isSelected
                             ? 'scale-110 sm:scale-125 bg-primary text-white shadow-[0_10px_25px_rgba(18,92,78,0.5),0_2px_8px_rgba(0,0,0,0.15)] ring-[2.5px] ring-white ring-offset-2 ring-offset-primary z-40'
@@ -382,10 +423,10 @@ export function SchematicMap({
 
             {/* On-Map Floating Navigation & Reset Controls */}
             {!hideControls && (
-              <div className="absolute top-3 end-3 z-20 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-white/95 p-1 shadow-lg backdrop-blur-sm">
+              <div className="absolute top-3 end-3 z-20 flex flex-col items-center gap-1 rounded-2xl glass border border-border/80 p-1 shadow-panel">
                 <button
                   aria-label={locale === 'ar' ? 'تكبير الخريطة' : 'Zoom in'}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl text-ink transition-colors hover:bg-[#eee8dc] active:scale-95 focus-visible:outline-none"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-ink transition-colors hover:bg-surface-muted active:scale-95 focus-visible:outline-none"
                   onClick={handleZoomIn}
                   title={locale === 'ar' ? 'تكبير' : 'Zoom in'}
                   type="button"
@@ -407,7 +448,7 @@ export function SchematicMap({
 
                 <button
                   aria-label={locale === 'ar' ? 'تصغير الخريطة' : 'Zoom out'}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl text-ink transition-colors hover:bg-[#eee8dc] active:scale-95 focus-visible:outline-none"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-ink transition-colors hover:bg-surface-muted active:scale-95 focus-visible:outline-none"
                   onClick={handleZoomOut}
                   title={locale === 'ar' ? 'تصغير' : 'Zoom out'}
                   type="button"
@@ -457,6 +498,23 @@ export function SchematicMap({
               </div>
             )}
           </div>
+
+          {/*
+            Results follow the map only when the visitor asks, so panning never
+            shifts the list out from under the cursor.
+          */}
+          {mapMoved && onSearchArea ? (
+            <div className="absolute inset-x-0 top-3 z-30 flex justify-center">
+              <Button
+                className="animate-map-card-in shadow-panel"
+                data-testid="search-this-area"
+                onClick={onSearchArea}
+                size="sm"
+              >
+                {labels.searchThisArea}
+              </Button>
+            </div>
+          ) : null}
 
           {/* Floating Bottom Overlay: Selected Listing Preview Card or Privacy Note */}
           {selectedListing ? (
@@ -903,14 +961,17 @@ function SchematicFallback({
         className="absolute inset-0 opacity-40"
         style={{
           backgroundImage:
-            'linear-gradient(35deg, transparent 46%, #125c4e22 47%, #125c4e22 53%, transparent 54%), linear-gradient(-20deg, transparent 47%, #b8643b33 48%, #b8643b33 52%, transparent 53%)',
+            'linear-gradient(35deg, transparent 46%, rgb(var(--color-primary) / 0.16) 47%, rgb(var(--color-primary) / 0.16) 53%, transparent 54%), linear-gradient(-20deg, transparent 47%, rgb(var(--color-accent) / 0.2) 48%, rgb(var(--color-accent) / 0.2) 52%, transparent 53%)',
           backgroundSize: '120px 120px',
         }}
       />
-      <div className="relative flex h-full min-h-[22rem] flex-col justify-between p-5">
-        <p className="max-w-sm text-sm text-ink-muted">
-          {labels.mapDescription}
-        </p>
+      <div className="relative flex h-full min-h-[22rem] flex-col justify-between gap-5 p-5">
+        <div className="max-w-md" data-testid="map-fallback-status" role="status">
+          <p className="font-semibold text-ink">{labels.mapUnavailable}</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            {labels.mapUnavailableHint}
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {pins.map((listing, index) => (
             <Button
