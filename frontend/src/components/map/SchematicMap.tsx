@@ -320,7 +320,7 @@ export function SchematicMap({
           style={isFullHeight ? { height: '100%' } : { height }}
         >
           {/* Absolutely Positioned Map Frame - Cannot Expand Parent */}
-          <div className="absolute inset-0 h-full w-full overflow-hidden">
+          <div className="absolute inset-0 h-full w-full overflow-hidden bg-surface-sunken dark:bg-[#121b18]">
             <Map
               initialViewState={{ latitude, longitude, zoom: 10.5 }}
               mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
@@ -526,8 +526,8 @@ export function SchematicMap({
                 onClose={() => onSelect('')}
               />
             </div>
-          ) : (
-            <div className="pointer-events-none absolute bottom-4 start-4 z-10 max-w-sm rounded-2xl border border-border bg-white px-3.5 py-2 text-xs text-ink-muted shadow-md">
+          ) : !hideControls ? (
+            <div className="pointer-events-none absolute bottom-4 start-4 z-10 max-w-sm rounded-2xl border border-border/80 bg-surface-raised/95 dark:bg-surface/95 backdrop-blur px-3.5 py-2 text-xs text-ink-muted shadow-md">
               <div className="flex items-center gap-2">
                 <svg
                   className="h-3.5 w-3.5 shrink-0 text-primary"
@@ -541,7 +541,7 @@ export function SchematicMap({
                 <span>{labels.mapDescription}</span>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       ) : (
         <SchematicFallback
@@ -628,9 +628,8 @@ function MapListingPreviewCard({
 
   return (
     <div
-      className="group relative flex flex-row items-stretch overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-white shadow-[0_16px_40px_rgba(25,42,37,0.18),0_4px_12px_rgba(0,0,0,0.06)] transition-all duration-300 hover:shadow-[0_20px_50px_rgba(25,42,37,0.24),0_6px_16px_rgba(0,0,0,0.1)] cursor-pointer animate-map-card-in select-none"
+      className="group relative flex flex-row items-stretch overflow-hidden rounded-2xl sm:rounded-3xl border border-border/80 bg-surface-raised shadow-[0_16px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.6),0_6px_16px_rgba(0,0,0,0.4)] transition-all duration-300 hover:shadow-glow cursor-pointer animate-map-card-in select-none"
       onClick={handleCardClick}
-      style={{ backgroundColor: '#ffffff' }}
     >
       {/* Top Accent Gradient Bar for Verified Listings */}
       {isVerified && (
@@ -643,7 +642,7 @@ function MapListingPreviewCard({
       {/* Dismiss / Close Button */}
       <button
         aria-label={labels.close || (locale === 'ar' ? 'إغلاق' : 'Close')}
-        className="absolute end-2 top-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-white text-ink-muted border border-border/80 shadow-sm transition-all duration-200 hover:bg-danger hover:text-white hover:border-danger hover:scale-110 active:scale-90 focus-visible:outline-none"
+        className="absolute end-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised/90 text-ink-muted border border-border/80 shadow-sm backdrop-blur transition-all duration-200 hover:bg-danger hover:text-white hover:border-danger hover:scale-110 active:scale-90 focus-visible:outline-none"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
@@ -666,7 +665,7 @@ function MapListingPreviewCard({
       </button>
 
       {/* Thumbnail Container with Badges and Wishlist */}
-      <div className="relative w-32 sm:w-44 shrink-0 overflow-hidden bg-[#eee8dc] m-2 sm:m-2.5 rounded-xl sm:rounded-2xl">
+      <div className="relative w-32 sm:w-44 shrink-0 overflow-hidden bg-surface-muted m-2 sm:m-2.5 rounded-xl sm:rounded-2xl border border-border/50">
         {listing.coverImage && !imageBroken ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -676,7 +675,7 @@ function MapListingPreviewCard({
             src={listing.coverImage.url}
           />
         ) : (
-          <div className="flex h-full min-h-[110px] flex-col items-center justify-center p-2 text-center text-xs text-ink-muted bg-[#eee8dc]">
+          <div className="flex h-full min-h-[110px] flex-col items-center justify-center p-2 text-center text-xs text-ink-muted bg-surface-muted">
             <svg
               className="h-7 w-7 text-ink-muted/50 mb-1"
               fill="none"
@@ -741,7 +740,7 @@ function MapListingPreviewCard({
 
         {/* Purpose Pill (Sale / Rent) */}
         <div className="absolute end-2 top-2 z-10">
-          <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-ink shadow-md border border-border/60">
+          <span className="inline-flex items-center rounded-full bg-surface-raised/95 dark:bg-surface/95 backdrop-blur px-2.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-ink shadow-sm border border-border/70">
             {listing.purpose === 'sale'
               ? labels.sale || (locale === 'ar' ? 'للبيع' : 'Sale')
               : labels.rent || (locale === 'ar' ? 'للإيجار' : 'Rent')}
@@ -777,7 +776,7 @@ function MapListingPreviewCard({
       </div>
 
       {/* Content & Specs Column */}
-      <div className="flex flex-1 flex-col justify-between py-2.5 pe-9 ps-1 sm:py-3 sm:pe-10 sm:ps-1.5 min-w-0 bg-white">
+      <div className="flex flex-1 flex-col justify-between py-2.5 pe-9 ps-1 sm:py-3 sm:pe-10 sm:ps-1.5 min-w-0 bg-surface-raised">
         {/* Top: Price & Title */}
         <div>
           {/* Price with High-Contrast Typography */}
@@ -828,7 +827,7 @@ function MapListingPreviewCard({
         {/* Specs Ribbon with Crisp SVGs */}
         <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-ink">
           {/* Area Size */}
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[#eee8dc] px-1.5 py-0.5 text-ink">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-surface-muted px-2 py-0.5 text-ink border border-border/50">
             <svg
               className="h-3 w-3 shrink-0 text-ink-muted"
               fill="none"
@@ -846,7 +845,7 @@ function MapListingPreviewCard({
           </span>
 
           {/* Bedrooms */}
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[#eee8dc] px-1.5 py-0.5 text-ink">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-surface-muted px-2 py-0.5 text-ink border border-border/50">
             <svg
               className="h-3 w-3 shrink-0 text-ink-muted"
               fill="none"
@@ -867,7 +866,7 @@ function MapListingPreviewCard({
           </span>
 
           {/* Bathrooms */}
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[#eee8dc] px-1.5 py-0.5 text-ink">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-surface-muted px-2 py-0.5 text-ink border border-border/50">
             <svg
               className="h-3 w-3 shrink-0 text-ink-muted"
               fill="none"

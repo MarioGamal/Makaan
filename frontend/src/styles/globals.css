@@ -614,3 +614,30 @@
   }
 }
 
+/* Mapbox GL dark-mode & container tuning */
+.mapboxgl-map {
+  font-family: inherit;
+}
+
+.dark .mapboxgl-ctrl-attrib {
+  background-color: rgb(var(--color-surface) / 0.85) !important;
+  color: rgb(var(--color-ink-muted)) !important;
+  border-radius: 8px;
+}
+
+.dark .mapboxgl-ctrl-attrib a {
+  color: rgb(var(--color-primary)) !important;
+}
+
+.dark .mapboxgl-compact {
+  background-color: rgb(var(--color-surface-raised) / 0.9) !important;
+}
+
+.dark .mapboxgl-ctrl-attrib-button {
+  background-color: rgb(var(--color-surface-raised)) !important;
+}
+
+.mapboxgl-canvas-container {
+  transition: opacity 250ms ease-out;
+}
+

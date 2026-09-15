@@ -8,10 +8,21 @@ import { createPortal } from 'react-dom';
 import type { PublicListingSearchResponse } from '@makaan/shared/types/marketplace';
 
 import { HeroSection } from '../components/home/HeroSection';
+import {
+  HomeMapSection,
+  type MapCategory,
+} from '../components/home/HomeMapSection';
 import { useLocale } from '../components/layout/LocaleProvider';
 import { PublicListingCard } from '../components/listing/PublicListingCard';
 import { SchematicMap } from '../components/map/SchematicMap';
-import { AsyncState, Badge, Button, Card, ScrollReveal } from '../components/ui';
+import {
+  AsyncState,
+  Badge,
+  Button,
+  Card,
+  ScrollReveal,
+  SegmentedControl,
+} from '../components/ui';
 import {
   ArrowIcon,
   CloseIcon,
@@ -39,14 +50,21 @@ export default function HomePage({ featured }: HomePageProps) {
    * gets the whole viewport without pushing the landing content around.
    */
   const [selectedMapId, setSelectedMapId] = useState<string>();
+  const [mapCategory, setMapCategory] = useState<MapCategory>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMapKey, setModalMapKey] = useState(0);
   const [mapResetTrigger, setMapResetTrigger] = useState(0);
-  const [mounted, setMounted] = useState(false);
   const mapDialogTitleId = useId();
   const mapDialogRef = useRef<HTMLDivElement>(null);
   const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
   const mapWasOpenRef = useRef(false);
+
+  const openMapModal = useCallback(() => {
+    setSelectedMapId(undefined);
+    setMapResetTrigger((previous) => previous + 1);
+    setIsModalOpen(true);
+  }, []);
 
   const closeMapModal = useCallback(() => {
     setIsModalOpen(false);
@@ -111,7 +129,15 @@ export default function HomePage({ featured }: HomePageProps) {
 
   /** Only fetched once the dialog is open — a closed map costs nothing. */
   const mapListings = useListings(
-    isModalOpen ? { locale, page: 1, pageSize: 40, sort: 'newest' } : null,
+    isModalOpen
+      ? {
+          locale,
+          page: 1,
+          pageSize: 40,
+          sort: 'newest',
+          purpose: mapCategory === 'all' ? undefined : mapCategory,
+        }
+      : null,
   );
   const pinnedCount = mapListings.listings.filter(
     (listing) => listing.publicLocation.mode === 'approximate',
@@ -167,6 +193,12 @@ export default function HomePage({ featured }: HomePageProps) {
       <main className="bg-canvas pb-8" id="main-content">
         <div className="mx-auto max-w-wide space-y-16 px-3 pt-3 md:space-y-24 md:px-4">
           <HeroSection />
+
+          <HomeMapSection
+            category={mapCategory}
+            onCategoryChange={setMapCategory}
+            onOpenMap={openMapModal}
+          />
 
           <section className="mx-auto w-full max-w-content">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -332,7 +364,34 @@ export default function HomePage({ featured }: HomePageProps) {
                       ) : null}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SegmentedControl<MapCategory>
+                        label={copy.purpose}
+                        onChange={(next) => {
+                          setMapCategory(next);
+                          setSelectedMapId(undefined);
+                          setMapResetTrigger((previous) => previous + 1);
+                        }}
+                        options={[
+                          {
+                            value: 'all',
+                            label: copy.allCategories,
+                            testId: 'modal-category-all',
+                          },
+                          {
+                            value: 'sale',
+                            label: copy.buy,
+                            testId: 'modal-category-sale',
+                          },
+                          {
+                            value: 'long_term_rent',
+                            label: copy.rent,
+                            testId: 'modal-category-rent',
+                          },
+                        ]}
+                        size="sm"
+                        value={mapCategory}
+                      />
                       <Button
                         onClick={() => {
                           setSelectedMapId(undefined);
@@ -343,14 +402,6 @@ export default function HomePage({ featured }: HomePageProps) {
                       >
                         {copy.resetMap}
                       </Button>
-                      <Link
-                        className="inline-flex min-h-tap items-center gap-1.5 rounded-pill border border-border bg-surface-raised px-4 text-xs font-semibold text-ink transition-colors hover:border-primary hover:bg-primary hover:text-white"
-                        href="/browse?view=map"
-                        onClick={closeMapModal}
-                      >
-                        {copy.browseListings}
-                        <ArrowIcon className="flip-inline size-4" />
-                      </Link>
                       <Button
                         aria-label={copy.closeMap}
                         icon={<CloseIcon className="size-[1.1rem]" />}
@@ -366,7 +417,7 @@ export default function HomePage({ featured }: HomePageProps) {
                     <SchematicMap
                       className="h-full w-full rounded-none border-0 shadow-none"
                       height="100%"
-                      key={`modal-map-${modalMapKey}`}
+                      key={`modal-map-${modalMapKey}-${mapCategory}`}
                       labels={labels}
                       listings={mapListings.listings}
                       locale={locale}
@@ -388,11 +439,7 @@ export default function HomePage({ featured }: HomePageProps) {
             <button
               className="inline-flex min-h-tap items-center gap-2.5 rounded-pill bg-primary px-6 text-base font-semibold text-white shadow-float transition-all duration-300 ease-spring hover:scale-105 hover:bg-primary-strong active:scale-95 sm:text-sm"
               data-testid="show-map"
-              onClick={() => {
-                setSelectedMapId(undefined);
-                setMapResetTrigger((previous) => previous + 1);
-                setIsModalOpen(true);
-              }}
+              onClick={openMapModal}
               ref={mapTriggerRef}
               type="button"
             >
