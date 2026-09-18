@@ -317,31 +317,35 @@ export const demoListings = [
   ...marketDemoListings,
 ] as const;
 
-const listingMediaAssets = Object.fromEntries(
-  demoListings.map((listing) => [
-    listing.id,
-    listing.areaId === DEMO_IDS.newCairo
-      ? 'new-cairo-duplex.webp'
-      : listing.areaId === DEMO_IDS.heliopolis
-        ? 'heliopolis-apartment.webp'
-        : listing.propertyType === PropertyType.STUDIO
-          ? 'maadi-studio.webp'
-          : 'maadi-apartment.webp',
-  ]),
-) as Record<(typeof demoListings)[number]['id'], string>;
+const realPropertyMediaAssets = [
+  'pexels-11296222.webp',
+  'pexels-19345427.webp',
+  'pexels-23916862.webp',
+  'pexels-29149072.webp',
+  'pexels-4091969.webp',
+  'pexels-4832525.webp',
+  'pexels-7534563.webp',
+  'pexels-7535073.webp',
+  'pexels-8380586.webp',
+] as const;
 
 export const mediaMetadata = demoListings.flatMap((listing, listingIndex) => {
-  const assetFilename = listingMediaAssets[listing.id];
-  return [0, 1, 2].map((displayOrder) => ({
-    id: `50000000-0000-4000-8000-${String(listingIndex * 3 + displayOrder + 1).padStart(12, '0')}`,
-    listingId: listing.id,
-    assetFilename,
-    publicPath: `/media/listings/demo/${assetFilename}`,
-    displayOrder,
-    originalFilename: assetFilename,
-    width: 1536,
-    height: 1024,
-  }));
+  return [0, 1, 2].map((displayOrder) => {
+    const assetFilename =
+      realPropertyMediaAssets[
+        (listingIndex * 3 + displayOrder) % realPropertyMediaAssets.length
+      ];
+    return {
+      id: `50000000-0000-4000-8000-${String(listingIndex * 3 + displayOrder + 1).padStart(12, '0')}`,
+      listingId: listing.id,
+      assetFilename,
+      publicPath: `/media/listings/demo/${assetFilename}`,
+      displayOrder,
+      originalFilename: assetFilename,
+      width: 1800,
+      height: 1200,
+    };
+  });
 });
 
 export const moderationFixtures = [
