@@ -108,14 +108,11 @@ export function FilterPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SegmentedControl
           label={copy.purpose}
-          onChange={(value) => onChange({ purpose: value })}
+          onChange={(value) =>
+            onChange({ purpose: value === filters.purpose ? undefined : value })
+          }
           options={[
-            {
-              value: undefined,
-              label: copy.anyPurpose,
-              testId: 'filter-purpose-any',
-            },
-            { value: 'sale', label: copy.sale, testId: 'filter-purpose-sale' },
+            { value: 'sale', label: copy.buy, testId: 'filter-purpose-sale' },
             {
               value: 'long_term_rent',
               label: copy.rent,
@@ -258,7 +255,7 @@ function activeChips(filters: PropertyFilters, copy: Copy, locale: Locale) {
     chips.push({ key, label });
 
   if (filters.purpose)
-    push('purpose', filters.purpose === 'sale' ? copy.sale : copy.rent);
+    push('purpose', filters.purpose === 'sale' ? copy.buy : copy.rent);
   if (filters.propertyType?.length)
     push(
       'propertyType',

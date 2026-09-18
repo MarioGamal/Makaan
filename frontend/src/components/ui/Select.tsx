@@ -1,4 +1,9 @@
-import { forwardRef, useId, type SelectHTMLAttributes } from 'react';
+import {
+  forwardRef,
+  useId,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from 'react';
 
 import { ChevronIcon } from './icons';
 
@@ -7,6 +12,7 @@ export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   hint?: string;
   error?: string;
   containerClassName?: string;
+  icon?: ReactNode;
 };
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
@@ -18,6 +24,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       error,
       className = '',
       containerClassName = '',
+      icon,
       required,
       children,
       ...props
@@ -28,8 +35,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     const selectId = id ?? generatedId;
     const hintId = hint ? `${selectId}-hint` : undefined;
     const errorId = error ? `${selectId}-error` : undefined;
+
     return (
-      <div className={`space-y-1.5 ${containerClassName}`}>
+      <div
+        className={`${label || hint || error ? 'space-y-1.5' : ''} ${containerClassName}`}
+      >
         {label ? (
           <label
             className="block text-sm font-semibold text-ink"
@@ -39,7 +49,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             {required ? <span aria-hidden="true"> *</span> : null}
           </label>
         ) : null}
-        <div className="relative">
+        <div className="relative flex items-center">
+          {icon ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 start-3.5 z-10 flex shrink-0 items-center text-ink-subtle [&>svg]:size-4"
+            >
+              {icon}
+            </span>
+          ) : null}
           <select
             {...props}
             ref={ref}
@@ -49,19 +67,19 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               [hintId, errorId].filter(Boolean).join(' ') || undefined
             }
             aria-invalid={Boolean(error) || undefined}
-            className={`min-h-tap w-full appearance-none rounded-ui border bg-surface-raised py-2 ps-3.5 pe-11 text-ink transition-colors duration-200 focus-visible:border-primary ${
-              error
-                ? 'border-danger'
-                : 'border-border hover:border-border-strong'
+            className={`min-h-tap h-11 w-full appearance-none rounded-ui border bg-surface-raised py-2.5 ${
+              icon ? 'ps-10' : 'ps-3.5'
+            } pe-10 text-sm text-ink cursor-pointer transition-colors duration-200 outline-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-border-strong [&>option]:bg-surface-raised [&>option]:text-ink dark:[&>option]:bg-[#182622] dark:[&>option]:text-[#eef4f2] ${
+              error ? 'border-danger' : 'border-border'
             } ${className}`}
           >
             {children}
           </select>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-1.5 end-1.5 grid w-8 place-items-center rounded-xs text-ink-subtle"
+            className="pointer-events-none absolute inset-y-0 end-3.5 flex items-center text-ink-subtle"
           >
-            <ChevronIcon className="size-4" />
+            <ChevronIcon className="size-4 shrink-0" />
           </span>
         </div>
         {hint ? (

@@ -17,7 +17,10 @@ import {
  */
 export function useListings(
   params: ListingSearchParams | null,
-  options: { fallbackData?: PublicListingSearchResponse } = {},
+  options: {
+    fallbackData?: PublicListingSearchResponse;
+    keepPreviousData?: boolean;
+  } = {},
 ) {
   const key = params
     ? (['public-listings', JSON.stringify(params)] as const)
@@ -26,7 +29,7 @@ export function useListings(
     key,
     () => searchListings(params!),
     {
-      keepPreviousData: true,
+      keepPreviousData: options.keepPreviousData ?? true,
       fallbackData: options.fallbackData,
     },
   );
