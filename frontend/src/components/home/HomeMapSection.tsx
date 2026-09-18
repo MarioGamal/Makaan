@@ -1,4 +1,10 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import { useListings } from '../../hooks/useListings';
@@ -13,7 +19,7 @@ export type MapCategory = 'all' | 'sale' | 'long_term_rent';
 interface HomeMapSectionProps {
   category?: MapCategory;
   onCategoryChange?: (category: MapCategory) => void;
-  onOpenMap?: () => void;
+  onOpenMap?: (trigger: HTMLButtonElement) => void;
 }
 
 export function HomeMapSection({
@@ -56,7 +62,7 @@ export function HomeMapSection({
     [activeCategory, locale],
   );
 
-  const { listings } = useListings(queryParams);
+  const { listings } = useListings(queryParams, { keepPreviousData: false });
 
   const pinnedCount = useMemo(
     () =>
@@ -74,9 +80,9 @@ export function HomeMapSection({
     }
   };
 
-  const handleOpen = () => {
+  const handleOpen = (event: MouseEvent<HTMLButtonElement>) => {
     if (onOpenMap) {
-      onOpenMap();
+      onOpenMap(event.currentTarget);
     } else {
       setSelectedMapId(undefined);
       setModalResetTrigger((prev) => prev + 1);
@@ -146,19 +152,7 @@ export function HomeMapSection({
       </div>
 
       {/* Prototype Preview Card Container */}
-      <div
-        aria-label={copy.showMap}
-        className="group relative mt-8 h-[360px] sm:h-[460px] w-full cursor-pointer overflow-hidden rounded-card border border-border bg-surface shadow-panel transition-all duration-300 hover:border-primary/60 hover:shadow-float focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        onClick={handleOpen}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleOpen();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-      >
+      <div className="group relative mt-8 h-[360px] w-full overflow-hidden rounded-card border border-border bg-surface shadow-panel transition-all duration-300 hover:border-primary/60 hover:shadow-float sm:h-[460px]">
         {/* Prototype Header Badges */}
         <div className="pointer-events-none absolute top-4 start-4 z-10 flex items-center gap-2 rounded-pill border border-border/80 bg-surface-raised/95 dark:bg-surface/95 px-3.5 py-1.5 shadow-md backdrop-blur-md">
           <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -174,7 +168,11 @@ export function HomeMapSection({
         </div>
 
         {/* Live Mapbox Map rendered as non-blocking preview */}
-        <div className="pointer-events-none absolute inset-0 h-full w-full">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          inert
+        >
           <SchematicMap
             className="h-full w-full rounded-none border-0 shadow-none"
             height="100%"
@@ -188,13 +186,18 @@ export function HomeMapSection({
           />
         </div>
 
-        {/* Center Hover Action Pill */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-scrim/0 transition-all duration-300 group-hover:bg-scrim/15">
-          <div className="inline-flex items-center gap-2.5 rounded-pill border border-border/80 bg-surface-raised/95 dark:bg-surface/95 px-5 py-3 text-sm font-semibold text-ink shadow-float backdrop-blur-md transition-all duration-300 transform group-hover:scale-105 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+        {/* A single overlay button keeps the preview map out of the tab order. */}
+        <button
+          aria-label={copy.showMap}
+          className="absolute inset-0 z-20 flex items-center justify-center bg-scrim/0 transition-all duration-300 hover:bg-scrim/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          onClick={handleOpen}
+          type="button"
+        >
+          <span className="inline-flex items-center gap-2.5 rounded-pill border border-border/80 bg-surface-raised/95 px-5 py-3 text-sm font-semibold text-ink shadow-float backdrop-blur-md transition-all duration-300 group-hover:scale-105 group-hover:border-primary group-hover:bg-primary group-hover:text-white dark:bg-surface/95">
             <ExpandIcon className="size-4" />
             <span>{copy.showMap}</span>
-          </div>
-        </div>
+          </span>
+        </button>
       </div>
 
       {/* Self-contained modal popup fallback if onOpenMap is not provided */}

@@ -56,11 +56,12 @@ export default function HomePage({ featured }: HomePageProps) {
   const [mapResetTrigger, setMapResetTrigger] = useState(0);
   const mapDialogTitleId = useId();
   const mapDialogRef = useRef<HTMLDivElement>(null);
-  const mapTriggerRef = useRef<HTMLButtonElement>(null);
+  const mapOpenerRef = useRef<HTMLElement | null>(null);
   const [mounted, setMounted] = useState(false);
   const mapWasOpenRef = useRef(false);
 
-  const openMapModal = useCallback(() => {
+  const openMapModal = useCallback((trigger: HTMLElement) => {
+    mapOpenerRef.current = trigger;
     setSelectedMapId(undefined);
     setMapResetTrigger((previous) => previous + 1);
     setIsModalOpen(true);
@@ -122,7 +123,10 @@ export default function HomePage({ featured }: HomePageProps) {
   // Closing returns focus to the control that opened it.
   useEffect(() => {
     if (mapWasOpenRef.current && !isModalOpen) {
-      requestAnimationFrame(() => mapTriggerRef.current?.focus());
+      const opener = mapOpenerRef.current;
+      requestAnimationFrame(() => {
+        if (opener?.isConnected) opener.focus();
+      });
     }
     mapWasOpenRef.current = isModalOpen;
   }, [isModalOpen]);
@@ -439,8 +443,7 @@ export default function HomePage({ featured }: HomePageProps) {
             <button
               className="inline-flex min-h-tap items-center gap-2.5 rounded-pill bg-primary px-6 text-base font-semibold text-white shadow-float transition-all duration-300 ease-spring hover:scale-105 hover:bg-primary-strong active:scale-95 sm:text-sm"
               data-testid="show-map"
-              onClick={openMapModal}
-              ref={mapTriggerRef}
+              onClick={(event) => openMapModal(event.currentTarget)}
               type="button"
             >
               {copy.showMap}
