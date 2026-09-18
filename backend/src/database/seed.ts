@@ -300,6 +300,18 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
       }
 
       for (const listing of demoListings) {
+        const titleAr =
+          'titleAr' in listing
+            ? listing.titleAr
+            : listing.description.slice(0, 170);
+        const titleEn =
+          'titleEn' in listing
+            ? listing.titleEn
+            : `Demo residential listing ${listing.id.slice(-4)}`;
+        const descriptionEn =
+          'descriptionEn' in listing
+            ? listing.descriptionEn
+            : `Governed Cairo residential fixture ${listing.id.slice(-4)}.`;
         await manager.query(
           `INSERT INTO listings (id, seller_id, area_id, purpose, property_type, size_sqm, bedrooms, bathrooms,
              finishing_level, price_egp, description, exact_location, status, view_count, save_count, contact_count,
@@ -347,10 +359,10 @@ export async function seedDatabase(databaseUrl?: string): Promise<void> {
             listing.submittedAt,
             listing.approvedAt,
             listing.rejectionReason,
-            listing.description.slice(0, 170),
-            `Demo residential listing ${listing.id.slice(-4)}`,
+            titleAr,
+            titleEn,
             listing.description,
-            `Governed Cairo residential fixture ${listing.id.slice(-4)}.`,
+            descriptionEn,
             listing.sellerPublicLocationMode,
             listing.approvedPublicLocationMode,
             listing.publicLocationWkt,
