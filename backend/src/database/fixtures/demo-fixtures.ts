@@ -206,7 +206,9 @@ const marketDemoListings = marketReferenceListings.map((sample, index) => {
     descriptionEn: `${sample.titleEn}. Demo inventory based on public market asking data; the displayed location is approximate for privacy.`,
     locationWkt,
     publicLocationWkt,
-    publicLocationDistanceM: 180 + (index % 6) * 35,
+    // The fixed coordinate offset is approximately 170 metres in Cairo. The
+    // database trigger verifies this value against PostGIS within 2 metres.
+    publicLocationDistanceM: 170,
     sellerPublicLocationMode: 'approximate',
     approvedPublicLocationMode: 'approximate',
     revisionId: `71000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
